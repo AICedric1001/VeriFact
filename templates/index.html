@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content=
+        "width=device-width, initial-scale=1.0">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='index.css') }}" media="screen" />
+</head>
+<style>
+    #toggleSidebarBtn {
+        position: fixed;
+        top: 50%;
+        right: 0;
+        transform: translateY(-50%);
+        background-color: #007bff;
+        color: white;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 8px 0 0 8px;
+        cursor: pointer;
+        z-index: 9999;
+        font-size: 16px;
+        box-shadow: -2px 2px 8px rgba(0,0,0,0.2);
+        transition: background-color 0.2s ease;
+      }
+      
+      #toggleSidebarBtn:hover {
+        background-color: #0056b3;
+      }
+    .sidebar {
+        position: fixed;
+        top: 0;
+        right: -400px;
+        width: 400px;
+        height: 100%;
+        background-color: #f8f9fa;
+        box-shadow: -2px 0 6px rgba(0,0,0,0.2);
+        overflow-y: auto;
+        transition: right 0.3s ease;
+        z-index: 9999;
+        padding: 20px;
+      }
+      
+      .sidebar.open {
+        right: 0;
+      }
+      
+      .sidebar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: bold;
+        margin-bottom: 10px;
+      }
+      
+      .sidebar-content {
+        white-space: pre-wrap;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+
+    </style>
+<body>
+    <!-- Responsive Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">OLD MASTER</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="#">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Profile</a>
+                    </li>
+                </ul>
+                <form class="d-flex" method="POST" action="/">
+                    <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search" name="query">
+                    <input type="hidden" name="serpapi_key" value="" />
+                    <button class="btn btn-outline-success" type="submit">Search</button>
+                </form>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div class="container" style="padding-top: 70px;">
+        <div class="row">
+
+            <!-- Left Sidebar -->
+            <div class="col-md-3">
+                <div class="list-group">
+                    <a href="#" class="list-group-item list-group-item-action active" aria-current="true">News Feed</a>
+                    <a href="#" class="list-group-item list-group-item-action">Messages</a>
+                    <a href="#" class="list-group-item list-group-item-action">Events</a>
+                    <a href="#" class="list-group-item list-group-item-action">Pages</a>
+                    <a href="#" class="list-group-item list-group-item-action">Groups</a>
+                </div>
+            </div>
+
+            <!-- Center Content -->
+            <div class="col-md-6">
+                <!-- Post Creation Form -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">Create Post</h5>
+                        <form id="post-form" method="POST" action="/add_post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <textarea class="form-control" id="postbox" name="post_content" rows="3" placeholder="What's on your mind?" required></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <input class="form-control" type="file" id="image" name="image" accept="image/*">
+                            </div>
+                            <button type="submit" id="buttonpost" class="btn btn-primary">Post</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Posts Feed -->
+                <div id="posts-container">
+                    {% for post in posts %}
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <button onclick="summarizePost({{ post.id }})">🛈 Summarize</button>
+                            <h6 class="card-subtitle mb-2 text-muted">User {{ post.user_id }}</h6>
+                            {% if post.has_image %}
+                            <img src="/post/image/{{ post.id }}" class="img-fluid mb-2" style="max-height:300px;" alt="Post Image">
+                            {% endif %}                            
+
+                            <p class="card-text">{{ post.content }}</p>
+                            <footer class="blockquote-footer mt-2">{{ post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at else 'Unknown time' }}</footer>
+                            <a href="#" class="card-link">Like</a>
+                            <a href="#" class="card-link">Comment</a>
+                            <a href="#" class="card-link">Share</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Right Sidebar -->
+            <div class="col-md-3">
+                <div class="list-group">
+                    <a href="#" class="list-group-item list-group-item-action">Trending</a>
+                    <a href="#" class="list-group-item list-group-item-action">Suggested Pages</a>
+                     <a href="#" class="list-group-item list-group-item-action">People you may know</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <button onclick="openSidebar()" id="toggleSidebarBtn">🧠 Summary</button>
+
+    <!-- Sidebar Summary Panel -->
+<div id="summarySidebar" class="sidebar">
+  <div class="sidebar-header">
+    <span>🧠 AI Summary</span>
+    <button onclick="closeSidebar()">✖</button>
+  </div>
+  <div id="summaryContent" class="sidebar-content">
+    <p>Loading summary...</p>
+    <p>👋 Click “Summarize” on a post to show AI summary here.</p>
+  </div>
+</div>
+
+
+    <script>
+        document.getElementById('post-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+            const postBox = document.getElementById('postbox');
+
+            fetch('/add_post', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const newPost = data.post;
+                    const postContainer = document.getElementById('posts-container');
+                    
+                    const postElement = document.createElement('div');
+                    postElement.className = 'card mb-3'; // Use Bootstrap card classes
+                    postElement.innerHTML = `
+                        <div class="card-body">
+                            <h6 class="card-subtitle mb-2 text-muted">User ${newPost.user_id}</h6>
+                             ${newPost.id && newPost.image_blob ? `<img src="/post/image/${newPost.id}" class="img-fluid mb-2" style="max-height:300px;" alt="Post Image">` : ''}
+                            <p class="card-text">${newPost.content || ''}</p>
+                            <footer class="blockquote-footer mt-2">${newPost.created_at}</footer>
+                             <a href="#" class="card-link">Like</a>
+                            <a href="#" class="card-link">Comment</a>
+                            <a href="#" class="card-link">Share</a>
+                        </div>
+                    `;
+                    postContainer.insertBefore(postElement, postContainer.firstChild);
+                    postBox.value = '';
+                    document.getElementById('image').value = '';
+                } else {
+                    console.error('Error posting:', data.message);
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An unexpected error occurred.');
+            });
+        });
+    </script>
+
+    <script>
+        function summarizePost(postId) {
+          fetch(`/summarize_post/${postId}`)
+            .then(response => response.json())
+            .then(data => {
+              if (data.status === "success") {
+                const summaryHTML = `
+                 🧠 Summary:\n${data.summary}
+        
+                  \n\n✅ Trusted Sources:\n${data.trusted_sources.join('\n')}
+                  \n\n⚠️ Unverified Sources:\n${data.unverified_sources.join('\n')}
+                `;
+                document.getElementById("summaryContent").innerText = summaryHTML;
+                document.getElementById("summarySidebar").classList.add("open");
+              } else {
+                alert("⚠️ Could not generate summary.");
+              }
+            })
+            .catch(err => {
+              console.error("Summary fetch failed:", err);
+            });
+        }
+        
+        function closeSidebar() {
+          document.getElementById("summarySidebar").classList.remove("open");
+        }
+        function openSidebar() {
+            document.getElementById("summarySidebar").classList.add("open");
+          }
+          
+        </script>
+        
+        
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+</body>
+
+</html>
