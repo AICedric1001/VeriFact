@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeriFact • Home</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+
+</head>
+<body>
+    <div class="app">
+        <header class="topbar">
+            <div class="left">
+                <span class="avatar" aria-hidden="true"><i class="fa fa-user-circle"></i></span>
+                <span class="user-name">User Acc.</span>
+            </div>
+            <div class="brand" aria-label="VeriFact">
+                <span class="brand-veri">Veri</span><span class="brand-fact">Fact</span>
+            </div>
+
+            <div class="right">
+            <div class="dropdown">
+                <button class="icon-btn" id="settingsBtn" aria-label="Settings">
+                <i class="fa fa-cog"></i>
+                </button>
+                <div class="dropdown-menu" id="settingsMenu">
+                <a href="about_verifact.html"><i class="fa fa-info-circle"></i> About VeriFact</a>
+                <a href="guide.html"><i class="fa fa-book"></i> Guide</a>
+                <a href="#"><i class="fa fa-comment"></i> Send Feedback</a>
+
+                <div class="divider"></div>
+                <a href="#"><i class="fa fa-sun"></i> Light Mode</a>
+                <a href="#"><i class="fa fa-moon"></i> Dark Mode</a>
+                <a href="#"><i class="fa fa-adjust"></i> Default Mode</a>
+                <div class="divider"></div>
+                <a href="archive.html"><i class="fa fa-archive"></i>Archive</a>
+                <a href="#" style="color: #e34234;"><i class="fa fa-sign-out" style="color: #e34234;"></i> Sign Out</a>
+                <div class="divider"></div>
+                <a href="#"><i class="fa fa-star"></i> Upgrade to Plus</a>
+                </div>
+            </div>
+            </div>
+
+        </header>
+
+        <!-- Tabs -->
+        <nav class="tabs" role="tablist" aria-label="Primary">
+            <button class="tab active" role="tab" aria-selected="true">HISTORY</button>
+            <button class="tab" role="tab" aria-selected="false">CHAT</button>
+        </nav>
+
+        <!--HISTORY TAB-->
+        <main class="content">
+            <section id="history-content" class="tab-content">
+                <section class="section-header">
+                  <div class="title">
+                    <span class="title-icon" aria-hidden="true"><i class="fa fa-history"></i></span>
+                    <span>HISTORY</span>
+                  </div>
+
+                  <div class="actions">
+                    <div class="search-box">
+                      <input type="text" placeholder="Search..." />
+                      <button><i class="fas fa-search"></i></button>
+                    </div>
+
+                    <button class="icon-btn" aria-label="Delete All"><i class="fa fa-trash"></i></button>
+                    <label class="checkbox" aria-label="Select"><input type="checkbox"><span></span></label>
+                  </div>
+                </section>
+
+                <div class="accordion">
+                    <div class="accordion-item">
+                        <div class="accordion-header">
+                            <div class="card-left">
+                                <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
+                                <div class="line"></div>
+                            </div>
+                            <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
+                                <i class="fa fa-angle-double-down"></i>
+                            </button>
+
+                            <div class="card-right">
+                                <button class="icon-btn more-btn" aria-label="More" type="button">
+                                    <i class="fa fa-ellipsis-v"></i>
+                                </button>
+                                <label class="checkbox" aria-label="Select">
+                                    <input type="checkbox">
+                                    <span></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Prototype Only -->
+                        <div class="accordion-content" hidden>
+                            <div class="s-line long"></div>
+                            <div class="s-line"></div>
+                            <div class="s-line short"></div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header">
+                            <div class="card-left">
+                                <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
+                                <div class="line"></div>
+                            </div>
+                            <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
+                                <i class="fa fa-angle-double-down"></i>
+                            </button>
+                        <div class="card-right">
+                            <button class="icon-btn more-btn" aria-label="More" type="button">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </button>
+                            <label class="checkbox" aria-label="Select">
+                                <input type="checkbox">
+                                <span></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="accordion-content" hidden>
+                        <div class="s-line long"></div>
+                        <div class="s-line"></div>
+                        <div class="s-line short"></div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <div class="accordion-header">
+                        <div class="card-left">
+                            <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
+                            <div class="line"></div>
+                        </div>
+                        <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
+                            <i class="fa fa-angle-double-down"></i>
+                        </button>
+                        <div class="card-right">
+                            <button class="icon-btn more-btn" aria-label="More" type="button">
+                                <i class="fa fa-ellipsis-v"></i>
+                            </button>
+                            <label class="checkbox" aria-label="Select">
+                                <input type="checkbox">
+                                <span></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="accordion-content" hidden>
+                        <div class="s-line long"></div>
+                        <div class="s-line"></div>
+                        <div class="s-line short"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Floating Dropdown for More actions -->
+        <div id="floatingDropdown" class="dropdown-menu">
+          <button type="button"><i class="fa fa-edit"></i> Rename</button>
+          <button type="button"><i class="fa fa-archive"></i> Archive</button>
+      </div>
+
+        <!--CHAT TAB-->
+        <section id="chat-content" class="tab-content" style="display:none;">
+          
+            <section id="history-content" class="tab-content">
+                <section class="section-header">
+                    <div class="title">
+                        <span class="title-icon" aria-hidden="true"><i class="fa fa-comments"></i></span>
+                        <span>CHATS</span>
+                    </div>
+                    <div class="actions">
+                      <button class="icon-btn" aria-label="Save All"><i class="fa fa-floppy-disk"></i></button>
+                      <button class="icon-btn" aria-label="Reset All"><i class="fa fa-refresh"></i></button>
+                  </div>
+                </section>
+
+                  <!-- Accuracy Indicator -->
+                  <div class="accuracy-card">
+                  <div class="accuracy-bar">
+                    <span class="true-label"><i class="fa fa-check-circle"></i>50%</span>
+                    <div class="bar">
+                      <div class="true" style="width: 50%"></div>
+                      <div class="false" style="width: 50%"></div>
+                    </div>
+                    <span class="false-label">50%<i class="fa fa-exclamation-triangle"></i></span>
+                  </div>
+                </div>
+
+                <!--CHAT AREA-->
+                <div class="chat-container">
+                  <div class="chat-box" id="chatBox"></div>
+                </div>
+
+                <div class="chat-input centered" id="chatInput">
+                  <div class="input-wrapper">
+                    <!-- Textarea at top -->
+                    <textarea id="userInput" placeholder="Ask A Question..." rows="1"></textarea>
+
+                    <!-- Bottom row icons -->
+                    <div class="bottom-row">
+                      <div class="left-icons">
+                        <button for="imageUpload" class="icon-btn">
+                          <i class="fas fa-image"></i>
+                        </button>
+                      </div>
+
+                      <div class="right-icons">
+                        <button class="mic-btn"><i class="fas fa-microphone"></i></button>
+                        <button onclick="sendMessage()" class="send-btn"><i class="fas fa-arrow-up"></i></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+
+        </section>
+        </main>
+
+        <script src="js/home.js"></script>
+
+        
+</body>
+</html>
