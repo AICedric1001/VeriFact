@@ -7,8 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="css/style.css">
 
 </head>
@@ -17,7 +18,7 @@
         <header class="topbar">
             <div class="left">
                 <span class="avatar" aria-hidden="true"><i class="fa fa-user-circle"></i></span>
-                <span class="user-name">User Acc.</span>
+                <span class="user-name">Sign In</span>
             </div>
             <div class="brand" aria-label="VeriFact">
                 <span class="brand-veri">Veri</span><span class="brand-fact">Fact</span>
@@ -31,16 +32,21 @@
                 <div class="dropdown-menu" id="settingsMenu">
                 <a href="about_verifact.html"><i class="fa fa-info-circle"></i> About VeriFact</a>
                 <a href="guide.html"><i class="fa fa-book"></i> Guide</a>
-                <a href="#"><i class="fa fa-comment"></i> Send Feedback</a>
+                <button type="button" id="openFeedbackModal"><i class="fa fa-comment"></i> Send Feedback</button>
 
                 <div class="divider"></div>
-                <a href="#"><i class="fa fa-sun"></i> Light Mode</a>
-                <a href="#"><i class="fa fa-moon"></i> Dark Mode</a>
-                <a href="#"><i class="fa fa-adjust"></i> Default Mode</a>
+                <button type="button" id="lightModeBtn"><i class="fa fa-sun"></i> Light Mode</button>
+                <button type="button" id="darkModeBtn"><i class="fa fa-moon"></i> Dark Mode</button>
+                <button type="button" id="displayModeBtn"><i class="fa fa-adjust"></i> Display Mode</button>
+
+
                 <div class="divider"></div>
+
                 <a href="archive.html"><i class="fa fa-archive"></i>Archive</a>
-                <a href="#" style="color: #e34234;"><i class="fa fa-sign-out" style="color: #e34234;"></i> Sign Out</a>
+                <a href="auth.html" style="color: #e34234;"><i class="fa fa-sign-out" style="color: #e34234;"></i> Sign Out</a>
+
                 <div class="divider"></div>
+                
                 <a href="#"><i class="fa fa-star"></i> Upgrade to Plus</a>
                 </div>
             </div>
@@ -50,13 +56,13 @@
 
         <!-- Tabs -->
         <nav class="tabs" role="tablist" aria-label="Primary">
-            <button class="tab active" role="tab" aria-selected="true">HISTORY</button>
-            <button class="tab" role="tab" aria-selected="false">CHAT</button>
+            <button class="tab" role="tab" aria-selected="true">HISTORY</button>
+            <button class="tab active" role="tab" aria-selected="false">CHAT</button>
         </nav>
 
         <!--HISTORY TAB-->
         <main class="content">
-            <section id="history-content" class="tab-content">
+            <section id="history-content" class="tab-content" style="display:none;">
                 <section class="section-header">
                   <div class="title">
                     <span class="title-icon" aria-hidden="true"><i class="fa fa-history"></i></span>
@@ -78,9 +84,10 @@
                     <div class="accordion-item">
                         <div class="accordion-header">
                             <div class="card-left">
-                                <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
-                                <div class="line"></div>
-                            </div>
+                            <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
+                            <span class="item-title">Untitled</span>
+                        </div>
+
                             <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
                                 <i class="fa fa-angle-double-down"></i>
                             </button>
@@ -94,9 +101,8 @@
                                     <span></span>
                                 </label>
                             </div>
-                        </div>
 
-                        <!-- Prototype Only -->
+                        </div>
                         <div class="accordion-content" hidden>
                             <div class="s-line long"></div>
                             <div class="s-line"></div>
@@ -108,7 +114,7 @@
                         <div class="accordion-header">
                             <div class="card-left">
                                 <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
-                                <div class="line"></div>
+                                <span class="item-title">Untitled</span>
                             </div>
                             <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
                                 <i class="fa fa-angle-double-down"></i>
@@ -134,7 +140,7 @@
                     <div class="accordion-header">
                         <div class="card-left">
                             <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
-                            <div class="line"></div>
+                            <span class="item-title">Untitled</span>
                         </div>
                         <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
                             <i class="fa fa-angle-double-down"></i>
@@ -165,13 +171,13 @@
       </div>
 
         <!--CHAT TAB-->
-        <section id="chat-content" class="tab-content" style="display:none;">
+        <section id="chat-content" class="tab-content">
           
-            <section id="history-content" class="tab-content">
+            <section id="chat-content" class="tab-content">
                 <section class="section-header">
                     <div class="title">
                         <span class="title-icon" aria-hidden="true"><i class="fa fa-comments"></i></span>
-                        <span>CHATS</span>
+                        <span>CHAT</span>
                     </div>
                     <div class="actions">
                       <button class="icon-btn" aria-label="Save All"><i class="fa fa-floppy-disk"></i></button>
@@ -199,19 +205,20 @@
                 <div class="chat-input centered" id="chatInput">
                   <div class="input-wrapper">
                     <!-- Textarea at top -->
-                    <textarea id="userInput" placeholder="Ask A Question..." rows="1"></textarea>
+                     <label for="userInput" class="sr-only">Ask A Question...</label>
+                    <textarea id="userInput" name="userInput" placeholder="Ask A Question..." rows="1"></textarea>
 
                     <!-- Bottom row icons -->
                     <div class="bottom-row">
                       <div class="left-icons">
-                        <button for="imageUpload" class="icon-btn">
+                        <button for="imageUpload" class="img-btn" type="button">
                           <i class="fas fa-image"></i>
                         </button>
                       </div>
 
                       <div class="right-icons">
-                        <button class="mic-btn"><i class="fas fa-microphone"></i></button>
-                        <button onclick="sendMessage()" class="send-btn"><i class="fas fa-arrow-up"></i></button>
+                        <button class="mic-btn" type="button"><i class="fas fa-microphone"></i></button>
+                        <button onclick="sendMessage()" class="send-btn" type="button"><i class="fas fa-arrow-up"></i></button>
                       </div>
                     </div>
                   </div>
