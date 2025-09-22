@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from ai_summary import generate_summary_from_text
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 
@@ -39,13 +40,15 @@ def assign_user():
         try:
             with get_db_connection() as db:
                 with db.cursor() as cursor:
-                    insert_user_sql = "INSERT INTO users (uuid) VALUES (%s)"
-                    cursor.execute(insert_user_sql, (session['user_id'],))
+                    # Idempotent insert for anonymous visitor row
+                    insert_sql = "INSERT IGNORE INTO accounts (accid, created_at) VALUES (%s, NOW())"
+                    cursor.execute(insert_sql, (session['user_id'],))
                     db.commit()
                     # Get the user's id for future use
-                    cursor.execute("SELECT id FROM users WHERE uuid = %s", (session['user_id'],))
-                    user = cursor.fetchone()
-                    session['user_db_id'] = user['id']
+                    cursor.execute("SELECT id FROM accounts WHERE accid = %s", (session['user_id'],))
+                    acc = cursor.fetchone()
+                    if acc:
+                        session['user_db_id'] = acc['id']
         except Exception as e:
             print("❌ User creation error:", e)
     elif 'user_db_id' not in session:
@@ -53,10 +56,10 @@ def assign_user():
         try:
             with get_db_connection() as db:
                 with db.cursor() as cursor:
-                    cursor.execute("SELECT id FROM users WHERE uuid = %s", (session['user_id'],))
-                    user = cursor.fetchone()
-                    if user:
-                        session['user_db_id'] = user['id']
+                    cursor.execute("SELECT id FROM accounts WHERE accid = %s", (session['user_id'],))
+                    acc = cursor.fetchone()
+                    if acc:
+                        session['user_db_id'] = acc['id']
         except Exception as e:
             print("❌ Error getting user id:", e)
 
@@ -69,12 +72,12 @@ def index():
     try:
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                # Join with users table to get UUID and check if image exists
+                # Join with accounts table to get ACCID and check if image exists
                 sql = """
-                    SELECT p.id, p.content, p.created_at, u.uuid as user_id, 
+                    SELECT p.id, p.content, p.created_at, a.accid as user_id, 
                            CASE WHEN p.image_blob IS NOT NULL THEN 1 ELSE 0 END as has_image
                     FROM posts p 
-                    JOIN users u ON p.user_id = u.id 
+                    JOIN accounts a ON p.user_id = a.id 
                     ORDER BY p.created_at DESC
                 """
                 cursor.execute(sql)
@@ -108,95 +111,100 @@ def index():
 
     return render_template('index.html', posts=posts, results=results)
 
-@app.route('/add_post', methods=['POST'])
-def add_post():
-    if 'user_db_id' not in session:
-        return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+# -------- Authentication (Flask) --------
+@app.route('/auth', methods=['GET'])
+def auth_page():
+    # Render the auth UI
+    return render_template('VeriFact_interface/auth.html')
 
-    post_content = request.form.get('post_content')
-    image_file = request.files.get('image')
-    image_path = None
+# Serve the CSS/JS that currently live alongside the template
+@app.route('/css/<path:filename>')
+def serve_auth_css(filename):
+    base_dir = os.path.join(os.getcwd(), 'templates', 'VeriFact_interface', 'css')
+    return send_from_directory(base_dir, filename)
 
-    # Handle image upload
-    if image_file and allowed_file(image_file.filename):
-        image_blob = image_file.read()
-    else:
-        image_blob = None
+@app.route('/js/<path:filename>')
+def serve_auth_js(filename):
+    base_dir = os.path.join(os.getcwd(), 'templates', 'VeriFact_interface', 'js')
+    return send_from_directory(base_dir, filename)
 
-    if not post_content and not image_blob:
-        return jsonify({'status': 'error', 'message': 'Post content or image required'}), 400
-
+@app.route('/api/signup', methods=['POST'])
+def api_signup():
     try:
+        data = request.get_json(silent=True) or request.form
+        username = (data.get('username') or data.get('new_username') or '').strip()
+        password = (data.get('password') or data.get('new_password') or '').strip()
+        if not username or not password:
+            return jsonify({'status': 'error', 'message': 'Username and password required'}), 400
+
+        password_hash = generate_password_hash(password)
+
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                created_time = datetime.now()
-                insert_post_sql = """
-                    INSERT INTO posts (user_id, content, created_at, image_blob)
-                    VALUES (%s, %s, %s, %s)
-                """
-                cursor.execute(insert_post_sql, (session['user_db_id'], post_content, created_time, image_blob))
-                new_post_id = cursor.lastrowid
+                # Ensure a row exists for this visitor session
+                if 'user_id' not in session:
+                    session['user_id'] = str(uuid.uuid4())
+                    cursor.execute("INSERT IGNORE INTO accounts (accid, created_at) VALUES (%s, NOW())", (session['user_id'],))
+
+                # Check if username already exists
+                cursor.execute("SELECT id FROM accounts WHERE username = %s", (username,))
+                if cursor.fetchone():
+                    return jsonify({'status': 'error', 'message': 'Username already taken'}), 409
+
+                # Upgrade existing anonymous row to a full account
+                update_sql = (
+                    "UPDATE accounts SET username = %s, password_hash = %s, updated_at = NOW() WHERE accid = %s"
+                )
+                cursor.execute(update_sql, (username, password_hash, session['user_id']))
+                if cursor.rowcount == 0:
+                    # Fallback: create a row if none existed
+                    insert_sql = (
+                        "INSERT INTO accounts (accid, username, password_hash, created_at) VALUES (%s, %s, %s, NOW())"
+                    )
+                    cursor.execute(insert_sql, (session['user_id'], username, password_hash))
                 db.commit()
 
-                # Fetch the user's UUID to display
-                cursor.execute("SELECT uuid FROM users WHERE id = %s", (session['user_db_id'],))
-                user = cursor.fetchone()
-                user_uuid = user['uuid'] if user else 'Anonymous'
+                # Fetch db id and store in session
+                cursor.execute("SELECT id, accid, username FROM accounts WHERE accid = %s", (session['user_id'],))
+                acc = cursor.fetchone()
+                session['user_db_id'] = acc['id']
 
-        return jsonify({
-            'status': 'success',
-            'post': {
-                'id': new_post_id,
-                'content': post_content,
-                'user_id': user_uuid,
-                'created_at': created_time.strftime('%Y-%m-%d %H:%M'),
-                'image_blob': 'uploaded' if image_blob else None  # Just a status, not actual binary
-            }
-        })
+        return jsonify({'status': 'success', 'user': {'id': acc['id'], 'uuid': acc['accid'], 'username': acc['username']}})
     except Exception as e:
-        print("❌ Error creating post:", e)
-        return jsonify({'status': 'error', 'message': 'Failed to create post'}), 500
+        print("❌ Signup error:", e)
+        return jsonify({'status': 'error', 'message': 'Signup failed'}), 500
 
-@app.route('/post/image/<int:post_id>')
-def get_post_image(post_id):
+@app.route('/api/login', methods=['POST'])
+def api_login():
     try:
+        data = request.get_json(silent=True) or request.form
+        username = (data.get('username') or '').strip()
+        password = (data.get('password') or '').strip()
+        if not username or not password:
+            return jsonify({'status': 'error', 'message': 'Username and password required'}), 400
+
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                cursor.execute("SELECT image_blob FROM posts WHERE id = %s", (post_id,))
-                result = cursor.fetchone()
-                if result and result['image_blob']:
-                    return Response(result['image_blob'], mimetype='image/jpeg')  # Adjust mimetype if needed
+                cursor.execute("SELECT id, accid, username, password_hash FROM accounts WHERE username = %s", (username,))
+                acc = cursor.fetchone()
+                if not acc or not check_password_hash(acc['password_hash'], password):
+                    return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
+
+                # Log the user in
+                session['user_id'] = acc['accid']
+                session['user_db_id'] = acc['id']
+
+        return jsonify({'status': 'success', 'user': {'id': acc['id'], 'uuid': acc['accid'], 'username': acc['username']}})
     except Exception as e:
-        print("❌ Error fetching image:", e)
-    return '', 404
+        print("❌ Login error:", e)
+        return jsonify({'status': 'error', 'message': 'Login failed'}), 500
 
-@app.route('/img/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.pop('user_id', None)
+    session.pop('user_db_id', None)
+    return jsonify({'status': 'success'})
 
-@app.route('/summarize_post/<int:post_id>', methods=['GET'])
-def summarize_post(post_id):
-    try:
-        with get_db_connection() as db:
-            with db.cursor() as cursor:
-                cursor.execute("SELECT content FROM posts WHERE id = %s", (post_id,))
-                post = cursor.fetchone()
-
-        if not post:
-            return jsonify({'status': 'error', 'message': 'Post not found'}), 404
-
-        # Run AI summary
-        result = generate_summary_from_text(post['content'])
-
-        return jsonify({
-            'status': 'success',
-            'summary': result['summary'],
-            'trusted_sources': result['trusted_sources'],
-            'unverified_sources': result['unverified_sources']
-        })
-    except Exception as e:
-        print("❌ Summarization error:", e)
-        return jsonify({'status': 'error', 'message': 'Failed to summarize post'}), 500
 
 
 
