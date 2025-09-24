@@ -199,6 +199,11 @@ def api_login():
         print("❌ Login error:", e)
         return jsonify({'status': 'error', 'message': 'Login failed'}), 500
 
+@app.route('/home')
+def home():
+    # Render the home interface
+    return render_template('VeriFact_interface/home.html')
+
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
     session.pop('user_id', None)

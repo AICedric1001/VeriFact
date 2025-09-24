@@ -38,7 +38,7 @@
             return obj;
         }
 
-        function handleSubmit(form, url) {
+        function handleSubmit(form, url, isSignup = false) {
             form.addEventListener('submit', function(e){
                 e.preventDefault();
                 var body = toJSON(form);
@@ -51,15 +51,24 @@
                     return res.json().then(function(json){ return { ok: res.ok, json: json }; });
                 }).then(function(result){
                     if (!result.ok) { throw new Error(result.json && result.json.message || 'Request failed'); }
-                    // Close modal and optionally redirect
+                    // Close modal
                     close(form.closest('.modal'));
-                    window.location.href = '/';
+                    
+                    if (isSignup) {
+                        // For signup, show success message and don't redirect
+                        alert('Account created successfully! Please sign in with your credentials.');
+                        // Optionally open login modal
+                        if (loginModal) open(loginModal);
+                    } else {
+                        // For login, redirect to home interface
+                        window.location.href = '/home';
+                    }
                 }).catch(function(err){
                     alert(err.message || 'Something went wrong');
                 });
             });
         }
 
-        if (loginForm) handleSubmit(loginForm, '/api/login');
-        if (signupForm) handleSubmit(signupForm, '/api/signup');
+        if (loginForm) handleSubmit(loginForm, '/api/login', false);
+        if (signupForm) handleSubmit(signupForm, '/api/signup', true);
     })();

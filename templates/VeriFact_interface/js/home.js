@@ -616,6 +616,36 @@
             });
           });
 
+          // Sign Out functionality
+          document.addEventListener('DOMContentLoaded', function() {
+            const signOutBtn = document.getElementById('signOutBtn');
+            if (signOutBtn) {
+              signOutBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Call logout API
+                fetch('/api/logout', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'same-origin'
+                }).then(function(res) {
+                  return res.json().then(function(json) { return { ok: res.ok, json: json }; });
+                }).then(function(result) {
+                  if (result.ok) {
+                    // Redirect to auth page after successful logout
+                    window.location.href = '/auth';
+                  } else {
+                    alert('Logout failed. Please try again.');
+                  }
+                }).catch(function(err) {
+                  console.error('Logout error:', err);
+                  // Still redirect even if API call fails
+                  window.location.href = '/auth';
+                });
+              });
+            }
+          });
+
           // Feedback Modal functionality
           document.addEventListener('DOMContentLoaded', function() {
             const feedbackModal = document.getElementById('feedbackModal');
