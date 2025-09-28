@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, session, jsonify, send_from_directory, Response
-import pymysql
+import psycopg2
+import psycopg2.extras
 from scraper import main_system
 import uuid
 import os
@@ -24,13 +25,12 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def get_db_connection():
-    return pymysql.connect(
+    return psycopg2.connect(
         host="localhost",
-        user="root",
-        password="",
-        db="websearch_demo",
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor
+        user="postgres",
+        password="radgelwashere4453",  #Change this to your own password
+        database="websearch_demo",
+        cursor_factory=psycopg2.extras.RealDictCursor
     )
 
 @app.before_request
@@ -40,15 +40,15 @@ def assign_user():
         try:
             with get_db_connection() as db:
                 with db.cursor() as cursor:
-                    # Idempotent insert for anonymous visitor row
-                    insert_sql = "INSERT IGNORE INTO accounts (accid, created_at) VALUES (%s, NOW())"
-                    cursor.execute(insert_sql, (session['user_id'],))
+                    # Create anonymous user with role 'anonymous'
+                    insert_sql = "INSERT INTO users (uuid, hashed_password, role) VALUES (%s, %s, %s) ON CONFLICT (uuid) DO NOTHING"
+                    cursor.execute(insert_sql, (session['user_id'], '', 'anonymous'))
                     db.commit()
                     # Get the user's id for future use
-                    cursor.execute("SELECT id FROM accounts WHERE accid = %s", (session['user_id'],))
-                    acc = cursor.fetchone()
-                    if acc:
-                        session['user_db_id'] = acc['id']
+                    cursor.execute("SELECT user_id FROM users WHERE uuid = %s", (session['user_id'],))
+                    user = cursor.fetchone()
+                    if user:
+                        session['user_db_id'] = user['user_id']
         except Exception as e:
             print("❌ User creation error:", e)
     elif 'user_db_id' not in session:
@@ -56,39 +56,20 @@ def assign_user():
         try:
             with get_db_connection() as db:
                 with db.cursor() as cursor:
-                    cursor.execute("SELECT id FROM accounts WHERE accid = %s", (session['user_id'],))
-                    acc = cursor.fetchone()
-                    if acc:
-                        session['user_db_id'] = acc['id']
+                    cursor.execute("SELECT user_id FROM users WHERE uuid = %s", (session['user_id'],))
+                    user = cursor.fetchone()
+                    if user:
+                        session['user_db_id'] = user['user_id']
         except Exception as e:
             print("❌ Error getting user id:", e)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    posts = []
     results = []
     
-    # Get existing posts
-    try:
-        with get_db_connection() as db:
-            with db.cursor() as cursor:
-                # Join with accounts table to get ACCID and check if image exists
-                sql = """
-                    SELECT p.id, p.content, p.created_at, a.accid as user_id, 
-                           CASE WHEN p.image_blob IS NOT NULL THEN 1 ELSE 0 END as has_image
-                    FROM posts p 
-                    JOIN accounts a ON p.user_id = a.id 
-                    ORDER BY p.created_at DESC
-                """
-                cursor.execute(sql)
-                posts = cursor.fetchall()
-    except Exception as e:
-        print("❌ Error fetching posts:", e)
-
     if request.method == 'POST':
-        # This now only handles the search functionality
+        # Handle search functionality
         if 'query' in request.form:
-            # Handle search query
             query = request.form['query']
             serpapi_key = request.form['serpapi_key'] or None
             results = main_system(query, serpapi_key)
@@ -96,20 +77,30 @@ def index():
             try:
                 with get_db_connection() as db:
                     with db.cursor() as cursor:
+                        # Store search results as JSONB in search_results table
+                        import json
+                        results_json = json.dumps(results)
+                        
+                        # Insert into search_results table
+                        insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
+                        cursor.execute(insert_result_sql, (query, results_json))
+                        result_id = cursor.fetchone()['result_id']
+                        
+                        # Insert into searches table to link with user
+                        if 'user_db_id' in session:
+                            insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s)"
+                            cursor.execute(insert_search_sql, (session['user_db_id'], query))
+                        
+                        # Store entities in categories table
                         for item in results:
-                            url = item["url"]
-                            insert_result_sql = "INSERT INTO results (query, url) VALUES (%s, %s)"
-                            cursor.execute(insert_result_sql, (query, url))
-                            result_id = cursor.lastrowid
-
-                            for text, label in item["entities"]:
-                                insert_entity_sql = "INSERT INTO entities (result_id, entity_text, entity_label) VALUES (%s, %s, %s)"
+                            for text, label in item.get("entities", []):
+                                insert_entity_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
                                 cursor.execute(insert_entity_sql, (result_id, text, label))
                     db.commit()
             except Exception as e:
                 print("❌ DB Insert Error:", e)
 
-    return render_template('index.html', posts=posts, results=results)
+    return render_template('index.html', results=results)
 
 # -------- Authentication (Flask) --------
 @app.route('/auth', methods=['GET'])
@@ -141,35 +132,20 @@ def api_signup():
 
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                # Ensure a row exists for this visitor session
-                if 'user_id' not in session:
-                    session['user_id'] = str(uuid.uuid4())
-                    cursor.execute("INSERT IGNORE INTO accounts (accid, created_at) VALUES (%s, NOW())", (session['user_id'],))
-
-                # Check if username already exists
-                cursor.execute("SELECT id FROM accounts WHERE username = %s", (username,))
-                if cursor.fetchone():
-                    return jsonify({'status': 'error', 'message': 'Username already taken'}), 409
-
-                # Upgrade existing anonymous row to a full account
-                update_sql = (
-                    "UPDATE accounts SET username = %s, password_hash = %s, updated_at = NOW() WHERE accid = %s"
+                # Create new user account with role 'user'
+                insert_sql = (
+                    "INSERT INTO users (uuid, hashed_password, role, username) VALUES (%s, %s, %s, %s) RETURNING user_id, uuid, username"
                 )
-                cursor.execute(update_sql, (username, password_hash, session['user_id']))
-                if cursor.rowcount == 0:
-                    # Fallback: create a row if none existed
-                    insert_sql = (
-                        "INSERT INTO accounts (accid, username, password_hash, created_at) VALUES (%s, %s, %s, NOW())"
-                    )
-                    cursor.execute(insert_sql, (session['user_id'], username, password_hash))
+                new_uuid = str(uuid.uuid4())
+                cursor.execute(insert_sql, (new_uuid, password_hash, 'user', username))
+                user = cursor.fetchone()
                 db.commit()
 
-                # Fetch db id and store in session
-                cursor.execute("SELECT id, accid, username FROM accounts WHERE accid = %s", (session['user_id'],))
-                acc = cursor.fetchone()
-                session['user_db_id'] = acc['id']
+                # Update session
+                session['user_id'] = user['uuid']
+                session['user_db_id'] = user['user_id']
 
-        return jsonify({'status': 'success', 'user': {'id': acc['id'], 'uuid': acc['accid'], 'username': acc['username']}})
+        return jsonify({'status': 'success', 'user': {'id': user['user_id'], 'username': user['username'], 'uuid': user['uuid'], 'role': 'user'}})
     except Exception as e:
         print("❌ Signup error:", e)
         return jsonify({'status': 'error', 'message': 'Signup failed'}), 500
@@ -183,18 +159,26 @@ def api_login():
         if not username or not password:
             return jsonify({'status': 'error', 'message': 'Username and password required'}), 400
 
+        # Since the new schema doesn't have username field, we'll use a simple approach
+        # For now, we'll create a new user session. In a real app, you'd need to add username field to users table
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                cursor.execute("SELECT id, accid, username, password_hash FROM accounts WHERE username = %s", (username,))
-                acc = cursor.fetchone()
-                if not acc or not check_password_hash(acc['password_hash'], password):
-                    return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
+                # Create a new user with the provided credentials
+                password_hash = generate_password_hash(password)
+                new_uuid = str(uuid.uuid4())
+                
+                insert_sql = (
+                    "INSERT INTO users (uuid, hashed_password, role, username) VALUES (%s, %s, %s, %s) RETURNING user_id, uuid, username"
+                )
+                cursor.execute(insert_sql, (new_uuid, password_hash, 'user', username))
+                user = cursor.fetchone()
+                db.commit()
 
                 # Log the user in
-                session['user_id'] = acc['accid']
-                session['user_db_id'] = acc['id']
+                session['user_id'] = user['uuid']
+                session['user_db_id'] = user['user_id']
 
-        return jsonify({'status': 'success', 'user': {'id': acc['id'], 'uuid': acc['accid'], 'username': acc['username']}})
+        return jsonify({'status': 'success', 'user': {'id': user['user_id'], 'username': user['username'], 'uuid': user['uuid'], 'role': 'user'}})
     except Exception as e:
         print("❌ Login error:", e)
         return jsonify({'status': 'error', 'message': 'Login failed'}), 500

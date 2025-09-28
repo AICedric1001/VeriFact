@@ -1,15 +1,15 @@
-import pymysql
+import psycopg2
+import psycopg2.extras
 
-conn = pymysql.connect(
+conn = psycopg2.connect(
     host="localhost",
-    user="root",
-    password="",
-    db="websearch_demo",
-    charset="utf8mb4",
-    cursorclass=pymysql.cursors.DictCursor
+    user="postgres",
+    password="radgelwashere4453",  # Change this to your own password
+    database="websearch_demo",
+    cursor_factory=psycopg2.extras.RealDictCursor
 )
 
 with conn.cursor() as cursor:
-    cursor.execute("SELECT * FROM your_table")
+    cursor.execute("SELECT * FROM users LIMIT 5")
     result = cursor.fetchall()
     print(result)
