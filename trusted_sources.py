@@ -1,8 +1,8 @@
 FILTERED_DOMAINS = [
-    "rappler.com",
-    "philstar.com",
-    "inquirer.net",
-    "abs-cbn.com",
-    "verafiles.org",
-    "tsek.ph"
+    "https://www.rappler.com/",
+    "https://www.philstar.com/",
+    "https://www.inquirer.net/",
+    "https://www.abs-cbn.com/",
+    "https://www.verafiles.org/",
+    "https://www.tsek.ph/"
 ]

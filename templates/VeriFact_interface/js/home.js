@@ -6,6 +6,8 @@
 
             if (input.value.trim() === "") return;
 
+            const message = input.value.trim();
+            
             // Move chat input to bottom if centered
             chatInput.classList.remove("centered");
             chatInput.classList.add("bottom");
@@ -13,46 +15,201 @@
             // User bubble
             const userMsg = document.createElement("div");
             userMsg.className = "user-message";
-            userMsg.innerText = input.value;
+            userMsg.innerText = message;
             chatBox.appendChild(userMsg);
 
-            // Bot accordion bubble - generate 5 bot messages
-            for (let i = 1; i <= 5; i++) {
-              setTimeout(() => {
-                const botMsg = document.createElement("div");
-                botMsg.className = "bot-message";
-                botMsg.innerHTML = `
-                  <div class="accordion-item">
-                    <div class="accordion-header">
-                      <div class="url-row">
-                        <strong>URL:</strong> 
-                        <a href="https://example.com/${i}" target="_blank">example.com/${i}</a>
-                        <i class="fa fa-check-circle"></i>
-                      </div>
-                      <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+            // Clear input immediately
+            input.value = "";
+            input.style.height = "auto";
+
+            // Send message to backend
+            fetch('/api/chat/send', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({ message: message })
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.status === 'success') {
+                // Generate bot responses (simulate AI processing)
+                if (data.is_first_message) {
+                  // First message - use search_id
+                  generateBotResponses(data.search_id, chatBox, true);
+                } else {
+                  // Follow-up message - use chat_id
+                  generateBotResponses(data.chat_id, chatBox, false);
+                }
+              } else {
+                console.error('Failed to save message:', data.message);
+                showNotification('Failed to save message. Please try again.', 'error');
+              }
+            })
+            .catch(error => {
+              console.error('Error sending message:', error);
+              showNotification('Error sending message. Please try again.', 'error');
+            });
+          }
+
+          // Generate bot responses (NEW COMPACT VERSION)
+          function generateBotResponses(id, chatBox, isFirstMessage) {
+            // Create one compact container instead of 5 separate ones
+            setTimeout(() => {
+              const botMsg = document.createElement("div");
+              botMsg.className = "bot-message";
+              botMsg.innerHTML = `
+                <div class="accordion-item">
+                  <div class="accordion-header">
+                    <div class="url-row">
+                      <strong>📊 Analysis Results:</strong> 
+                      <span>Top 5 Sources Analyzed</span>
+                      <i class="fa fa-check-circle"></i>
                     </div>
-                    <div class="accordion-content">
-                      <p>This is summary #${i} of the article. It explains whether the information is accurate or misleading.</p>
+                    <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+                  </div>
+                  <div class="accordion-content">
+                    <div class="sources-list">
+                      <h4>📰 Top 5 Sources:</h4>
+                      <ol>
+                        <li><a href="https://example.com/1" target="_blank">Source 1: Climate Change Facts</a> <span class="credibility">✅ Credible</span></li>
+                        <li><a href="https://example.com/2" target="_blank">Source 2: Scientific Study</a> <span class="credibility">✅ Credible</span></li>
+                        <li><a href="https://example.com/3" target="_blank">Source 3: News Report</a> <span class="credibility">⚠️ Mixed</span></li>
+                        <li><a href="https://example.com/4" target="_blank">Source 4: Research Paper</a> <span class="credibility">✅ Credible</span></li>
+                        <li><a href="https://example.com/5" target="_blank">Source 5: Blog Post</a> <span class="credibility">❌ Questionable</span></li>
+                      </ol>
+                    </div>
+                    
+                    <div class="comprehensive-summary">
+                      <h4>🤖 AI Comprehensive Analysis:</h4>
+                      <p>Based on analysis of all 5 sources, the information appears to be <strong>largely credible</strong> with some mixed signals. The scientific sources (1, 2, 4) provide strong evidence, while sources 3 and 5 show varying levels of reliability. Overall credibility score: <strong>75%</strong>.</p>
+                      
+                      <div class="analysis-breakdown">
+                        <h5>Key Findings:</h5>
+                        <ul>
+                          <li>✅ 3 out of 5 sources are highly credible</li>
+                          <li>⚠️ 1 source shows mixed signals</li>
+                          <li>❌ 1 source appears questionable</li>
+                          <li>📊 Consensus: Information is mostly accurate</li>
+                        </ul>
+                      </div>
                     </div>
                   </div>
-                `;
-                chatBox.appendChild(botMsg);
-                chatBox.scrollTop = chatBox.scrollHeight; // auto scroll
+                </div>
+              `;
+              
+              chatBox.appendChild(botMsg);
+              chatBox.scrollTop = chatBox.scrollHeight; // auto scroll
 
-                // Enable toggle for this specific accordion
-                const toggleBtn = botMsg.querySelector(".accordion-toggle");
-                const accordionItem = botMsg.querySelector(".accordion-item");
-                toggleBtn.addEventListener("click", () => {
-                  accordionItem.classList.toggle("open");
-                });
+              // Enable toggle for this accordion
+              const toggleBtn = botMsg.querySelector(".accordion-toggle");
+              const accordionItem = botMsg.querySelector(".accordion-item");
+              toggleBtn.addEventListener("click", () => {
+                accordionItem.classList.toggle("open");
+              });
 
-              }, i * 500); // delay each bot message by 0.5 sec
-            }
-
-            // Clear input
-            input.value = "";
-            input.style.height = "auto"; // reset textarea height
+              // Update the response in the database
+              const responseText = `Comprehensive analysis of 5 sources completed. Overall credibility: 75%. 3 sources highly credible, 1 mixed, 1 questionable. Consensus: Information is mostly accurate.`;
+              
+              if (isFirstMessage) {
+                console.log('First message saved to searches table');
+              } else {
+                updateChatResponse(id, responseText);
+              }
+            }, 1000); // Single delay instead of multiple
           }
+
+          // Update chat response in database
+          function updateChatResponse(chatId, response) {
+            fetch(`/api/chat/update/${chatId}`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({ response: response })
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.status !== 'success') {
+                console.error('Failed to update response:', data.message);
+              }
+            })
+            .catch(error => {
+              console.error('Error updating response:', error);
+            });
+          }
+
+          // Load chat history when page loads
+          function loadChatHistory() {
+            fetch('/api/chat/history', {
+              method: 'GET',
+              credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.status === 'success' && data.messages.length > 0) {
+                const chatBox = document.getElementById('chatBox');
+                const chatInput = document.getElementById('chatInput');
+                
+                // Move chat input to bottom if there are messages
+                chatInput.classList.remove("centered");
+                chatInput.classList.add("bottom");
+                
+                // Load each message
+                data.messages.forEach(msg => {
+                  // Add user message
+                  if (msg.query_text) {
+                    const userMsg = document.createElement("div");
+                    userMsg.className = "user-message";
+                    userMsg.innerText = msg.query_text;
+                    chatBox.appendChild(userMsg);
+                  }
+                  
+                  // Add bot response if available (only for chat messages, not search messages)
+                  if (msg.response_text && msg.type === 'chat') {
+                    const botMsg = document.createElement("div");
+                    botMsg.className = "bot-message";
+                    botMsg.innerHTML = `
+                      <div class="accordion-item">
+                        <div class="accordion-header">
+                          <div class="url-row">
+                            <strong>Response:</strong> 
+                            <span>AI Analysis Complete</span>
+                            <i class="fa fa-check-circle"></i>
+                          </div>
+                          <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+                        </div>
+                        <div class="accordion-content">
+                          <p>${msg.response_text}</p>
+                        </div>
+                      </div>
+                    `;
+                    chatBox.appendChild(botMsg);
+                    
+                    // Enable toggle for this accordion
+                    const toggleBtn = botMsg.querySelector(".accordion-toggle");
+                    const accordionItem = botMsg.querySelector(".accordion-item");
+                    toggleBtn.addEventListener("click", () => {
+                      accordionItem.classList.toggle("open");
+                    });
+                  }
+                });
+                
+                // Scroll to bottom
+                chatBox.scrollTop = chatBox.scrollHeight;
+              }
+            })
+            .catch(error => {
+              console.error('Error loading chat history:', error);
+            });
+          }
+
+          // Load chat history when page loads
+          document.addEventListener('DOMContentLoaded', function() {
+            loadChatHistory();
+          });
 
           //Accordion Card
         (function(){
@@ -211,11 +368,17 @@
             const resetAllBtn = document.querySelector('button[aria-label="Reset All"]');
             if (resetAllBtn) {
               resetAllBtn.addEventListener('click', function() {
-                
+                // Clear chat history from database
+                fetch('/api/chat/clear', {
+                  method: 'DELETE',
+                  credentials: 'same-origin'
+                })
+                .then(response => response.json())
+                .then(data => {
                   const chatBox = document.getElementById('chatBox');
                   const chatInput = document.getElementById('chatInput');
                   
-                  // Clear all messages
+                  // Clear all messages from UI
                   chatBox.innerHTML = '';
                   
                   // Reset chat input to centered position
@@ -225,8 +388,16 @@
                   // Reset accuracy bar
                   updateAccuracy(0, 0);
                   
-                  showNotification('Chat reset successfully!', 'success');
-                
+                  if (data.status === 'success') {
+                    showNotification('Chat reset successfully!', 'success');
+                  } else {
+                    showNotification('Failed to reset chat. Please try again.', 'error');
+                  }
+                })
+                .catch(error => {
+                  console.error('Error resetting chat:', error);
+                  showNotification('Error resetting chat. Please try again.', 'error');
+                });
               });
             }
           });
@@ -571,35 +742,22 @@
               saveAllBtn.addEventListener('click', function() {
                 const removeLoading = addLoadingState(saveAllBtn, 'Saving...');
 
-                // Simulate save operation
-                setTimeout(() => {
-                  const chatBox = document.getElementById('chatBox');
-                  const chatMessages = chatBox.querySelectorAll('.bot-message, .user-message');
+                // Check if there are messages to save
+                const chatBox = document.getElementById('chatBox');
+                const chatMessages = chatBox.querySelectorAll('.bot-message, .user-message');
 
-                  if (chatMessages.length === 0) {
-                    removeLoading();
-                    showNotification('No messages to save!', 'warning'); // 👈 replaced alert
-                    return;
-                  }
-
-                  // Create a data object with all chat messages
-                  const chatData = {
-                    timestamp: new Date().toISOString(),
-                    messages: Array.from(chatMessages).map(msg => ({
-                      type: msg.classList.contains('user-message') ? 'user' : 'bot',
-                      content: msg.textContent || msg.innerText,
-                      timestamp: new Date().toISOString()
-                    }))
-                  };
-
-                  // Save to localStorage (you could also send to server)
-                  const savedChats = JSON.parse(localStorage.getItem('verifact_chats') || '[]');
-                  savedChats.push(chatData);
-                  localStorage.setItem('verifact_chats', JSON.stringify(savedChats));
-
+                if (chatMessages.length === 0) {
                   removeLoading();
-                  showNotification('Chat saved successfully!', 'success');
-                }, 1000); // Simulate network delay
+                  showNotification('No messages to save!', 'warning');
+                  return;
+                }
+
+                // Since messages are already saved to database when sent,
+                // this function now just confirms the save status
+                setTimeout(() => {
+                  removeLoading();
+                  showNotification('All messages are already saved to the database!', 'success');
+                }, 500);
               });
             }
           });

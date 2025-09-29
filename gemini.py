@@ -9,7 +9,7 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Correct model instantiation
-model = genai.GenerativeModel("models/gemini-1.5-flash")  # NOTE: full path with "models/"
+model = genai.GenerativeModel("models/gemini-2.0-flash")  # NOTE: full path with "models/"
 # You can also use: "models/gemini-pro" or just check with genai.list_models()
 
 def summarize_with_gemini(text):

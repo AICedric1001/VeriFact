@@ -28,7 +28,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="radgelwashere4453",  #Change this to your own password
+        password="Corl4453",  #Change this to your own password
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -96,6 +96,32 @@ def index():
                             for text, label in item.get("entities", []):
                                 insert_entity_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
                                 cursor.execute(insert_entity_sql, (result_id, text, label))
+                        
+                        # Generate AI summary using Gemini and store in usersummaries table
+                        if 'user_db_id' in session and results:
+                            print("🤖 Generating AI summary...")
+                            try:
+                                # Generate summary using the AI summary function
+                                summary_data = generate_summary_from_text(query, serpapi_key)
+                                summary_text = summary_data.get('summary', 'No summary available')
+                                
+                                # Store summary in usersummaries table
+                                insert_summary_sql = """
+                                    INSERT INTO usersummaries (user_id, result_id, summary_text) 
+                                    VALUES (%s, %s, %s)
+                                """
+                                cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, summary_text))
+                                print("✅ AI summary stored successfully")
+                                
+                            except Exception as summary_error:
+                                print(f"❌ AI Summary Error: {summary_error}")
+                                # Store a fallback summary
+                                fallback_summary = f"Summary generation failed for query: {query}"
+                                insert_summary_sql = """
+                                    INSERT INTO usersummaries (user_id, result_id, summary_text) 
+                                    VALUES (%s, %s, %s)
+                                """
+                                cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, fallback_summary))
                     db.commit()
             except Exception as e:
                 print("❌ DB Insert Error:", e)
@@ -156,29 +182,36 @@ def api_login():
         data = request.get_json(silent=True) or request.form
         username = (data.get('username') or '').strip()
         password = (data.get('password') or '').strip()
+
         if not username or not password:
             return jsonify({'status': 'error', 'message': 'Username and password required'}), 400
 
-        # Since the new schema doesn't have username field, we'll use a simple approach
-        # For now, we'll create a new user session. In a real app, you'd need to add username field to users table
         with get_db_connection() as db:
-            with db.cursor() as cursor:
-                # Create a new user with the provided credentials
-                password_hash = generate_password_hash(password)
-                new_uuid = str(uuid.uuid4())
-                
-                insert_sql = (
-                    "INSERT INTO users (uuid, hashed_password, role, username) VALUES (%s, %s, %s, %s) RETURNING user_id, uuid, username"
-                )
-                cursor.execute(insert_sql, (new_uuid, password_hash, 'user', username))
+            with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                # Fetch the user by username
+                cursor.execute("SELECT user_id, uuid, username, hashed_password, role FROM users WHERE username = %s", (username,))
                 user = cursor.fetchone()
-                db.commit()
 
-                # Log the user in
+                if not user:
+                    return jsonify({'status': 'error', 'message': 'Invalid username or password'}), 401
+
+                # Check password
+                if not check_password_hash(user['hashed_password'], password):
+                    return jsonify({'status': 'error', 'message': 'Invalid username or password'}), 401
+
+                # Log the user in (save session)
                 session['user_id'] = user['uuid']
                 session['user_db_id'] = user['user_id']
 
-        return jsonify({'status': 'success', 'user': {'id': user['user_id'], 'username': user['username'], 'uuid': user['uuid'], 'role': 'user'}})
+        return jsonify({
+            'status': 'success',
+            'user': {
+                'id': user['user_id'],
+                'username': user['username'],
+                'uuid': user['uuid'],
+                'role': user['role']
+            }
+        })
     except Exception as e:
         print("❌ Login error:", e)
         return jsonify({'status': 'error', 'message': 'Login failed'}), 500
@@ -194,7 +227,265 @@ def api_logout():
     session.pop('user_db_id', None)
     return jsonify({'status': 'success'})
 
+# -------- AI Summary Endpoints --------
+@app.route('/api/summaries', methods=['GET'])
+def get_user_summaries():
+    """Get all AI summaries for the current user"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Get summaries with related search info
+                query = """
+                    SELECT 
+                        us.summary_id,
+                        us.summary_text,
+                        us.created_at,
+                        sr.query,
+                        sr.results
+                    FROM usersummaries us
+                    JOIN search_results sr ON us.result_id = sr.result_id
+                    WHERE us.user_id = %s
+                    ORDER BY us.created_at DESC
+                """
+                cursor.execute(query, (session['user_db_id'],))
+                summaries = cursor.fetchall()
+                
+                # Convert to list of dicts for JSON response
+                summaries_list = []
+                for summary in summaries:
+                    summaries_list.append({
+                        'summary_id': summary['summary_id'],
+                        'summary_text': summary['summary_text'],
+                        'created_at': summary['created_at'].isoformat() if summary['created_at'] else None,
+                        'query': summary['query'],
+                        'results': summary['results']
+                    })
+                
+                return jsonify({'status': 'success', 'summaries': summaries_list})
+                
+    except Exception as e:
+        print("❌ Get summaries error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to retrieve summaries'}), 500
 
+@app.route('/api/summaries/<int:summary_id>', methods=['GET'])
+def get_specific_summary(summary_id):
+    """Get a specific AI summary by ID"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Get specific summary with related search info
+                query = """
+                    SELECT 
+                        us.summary_id,
+                        us.summary_text,
+                        us.created_at,
+                        sr.query,
+                        sr.results
+                    FROM usersummaries us
+                    JOIN search_results sr ON us.result_id = sr.result_id
+                    WHERE us.summary_id = %s AND us.user_id = %s
+                """
+                cursor.execute(query, (summary_id, session['user_db_id']))
+                summary = cursor.fetchone()
+                
+                if not summary:
+                    return jsonify({'status': 'error', 'message': 'Summary not found'}), 404
+                
+                return jsonify({
+                    'status': 'success', 
+                    'summary': {
+                        'summary_id': summary['summary_id'],
+                        'summary_text': summary['summary_text'],
+                        'created_at': summary['created_at'].isoformat() if summary['created_at'] else None,
+                        'query': summary['query'],
+                        'results': summary['results']
+                    }
+                })
+                
+    except Exception as e:
+        print("❌ Get specific summary error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to retrieve summary'}), 500
+
+# -------- Chat Endpoints --------
+@app.route('/api/chat/send', methods=['POST'])
+def send_chat_message():
+    """Save a chat message to the database"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({'status': 'error', 'message': 'Message is required'}), 400
+        
+        message = data['message'].strip()
+        if not message:
+            return jsonify({'status': 'error', 'message': 'Message cannot be empty'}), 400
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Check if there's a recent search for this user
+                check_sql = """
+                    SELECT search_id 
+                    FROM searches 
+                    WHERE account_id = %s 
+                    AND timestamp > NOW() - INTERVAL '1 hour'
+                    ORDER BY timestamp DESC 
+                    LIMIT 1
+                """
+                cursor.execute(check_sql, (session['user_db_id'],))
+                recent_search = cursor.fetchone()
+                
+                if recent_search:
+                    # Follow-up message - save to conversationHistory with search_id
+                    insert_sql = """
+                        INSERT INTO "conversationHistory" (user_id, query_text, response_text, search_id) 
+                        VALUES (%s, %s, %s, %s) 
+                        RETURNING chat_id, timestamp
+                    """
+                    cursor.execute(insert_sql, (session['user_db_id'], message, '', recent_search['search_id']))
+                    result = cursor.fetchone()
+                    db.commit()
+                    
+                    return jsonify({
+                        'status': 'success',
+                        'chat_id': result['chat_id'],
+                        'search_id': recent_search['search_id'],
+                        'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
+                        'is_first_message': False
+                    })
+                else:
+                    # First message - save to searches table
+                    insert_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id, timestamp"
+                    cursor.execute(insert_sql, (session['user_db_id'], message))
+                    result = cursor.fetchone()
+                    db.commit()
+                    
+                    return jsonify({
+                        'status': 'success',
+                        'search_id': result['search_id'],
+                        'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
+                        'is_first_message': True
+                    })
+                
+    except Exception as e:
+        print("❌ Send chat message error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to save message'}), 500
+
+@app.route('/api/chat/history', methods=['GET'])
+def get_chat_history():
+    """Get chat history for the current user"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Get combined history from both searches and conversationHistory
+                query = """
+                    SELECT 
+                        'search' as type,
+                        search_id as id,
+                        query_text,
+                        '' as response_text,
+                        timestamp,
+                        NULL as search_id
+                    FROM searches
+                    WHERE account_id = %s
+                    
+                    UNION ALL
+                    
+                    SELECT 
+                        'chat' as type,
+                        chat_id as id,
+                        query_text,
+                        response_text,
+                        timestamp,
+                        search_id
+                    FROM "conversationHistory"
+                    WHERE user_id = %s
+                    
+                    ORDER BY timestamp ASC
+                """
+                cursor.execute(query, (session['user_db_id'], session['user_db_id']))
+                messages = cursor.fetchall()
+                
+                # Convert to list of dicts for JSON response
+                messages_list = []
+                for msg in messages:
+                    messages_list.append({
+                        'type': msg['type'],
+                        'id': msg['id'],
+                        'query_text': msg['query_text'],
+                        'response_text': msg['response_text'],
+                        'timestamp': msg['timestamp'].isoformat() if msg['timestamp'] else None,
+                        'search_id': msg['search_id']
+                    })
+                
+                return jsonify({'status': 'success', 'messages': messages_list})
+                
+    except Exception as e:
+        print("❌ Get chat history error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to retrieve chat history'}), 500
+
+@app.route('/api/chat/update/<int:chat_id>', methods=['PUT'])
+def update_chat_response(chat_id):
+    """Update a chat message with bot response"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        data = request.get_json()
+        if not data or 'response' not in data:
+            return jsonify({'status': 'error', 'message': 'Response is required'}), 400
+        
+        response = data['response'].strip()
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Update the response for this chat
+                update_sql = """
+                    UPDATE "conversationHistory" 
+                    SET response_text = %s 
+                    WHERE chat_id = %s AND user_id = %s
+                """
+                cursor.execute(update_sql, (response, chat_id, session['user_db_id']))
+                
+                if cursor.rowcount == 0:
+                    return jsonify({'status': 'error', 'message': 'Chat message not found'}), 404
+                
+                db.commit()
+                return jsonify({'status': 'success'})
+                
+    except Exception as e:
+        print("❌ Update chat response error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to update response'}), 500
+
+@app.route('/api/chat/clear', methods=['DELETE'])
+def clear_chat_history():
+    """Clear all chat history for the current user"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Delete all chat history for this user
+                delete_sql = "DELETE FROM \"conversationHistory\" WHERE user_id = %s"
+                cursor.execute(delete_sql, (session['user_db_id'],))
+                db.commit()
+                
+                return jsonify({'status': 'success', 'message': 'Chat history cleared'})
+                
+    except Exception as e:
+        print("❌ Clear chat history error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to clear chat history'}), 500
 
 
 if __name__ == '__main__':
