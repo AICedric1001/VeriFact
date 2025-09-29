@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, session, jsonify, send_from_directory, Response
 import psycopg2
 import psycopg2.extras
-from scraper import main_system
+from scraper import main_system, search_serpapi
 import uuid
 import os
 from datetime import datetime
@@ -28,7 +28,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="Corl4453",  #Change this to your own password
+        password="radgelwashere4453",  #Change this to your own password
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -80,7 +80,7 @@ def index():
         # Handle search functionality
         if 'query' in request.form:
             query = request.form['query']
-            serpapi_key = request.form['serpapi_key'] or None
+            serpapi_key = request.form.get('serpapi_key') or os.getenv("SERPAPI_API_KEY")
             results = main_system(query, serpapi_key)
 
             try:
@@ -100,6 +100,33 @@ def index():
                             insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s)"
                             cursor.execute(insert_search_sql, (session['user_db_id'], query))
                         
+                        # Store each article as its own row in articles table
+                        for item in results:
+                            url = item.get('url')
+                            title = item.get('title')
+                            content = item.get('content')
+                            # Derive source_name from domain
+                            source_name = None
+                            try:
+                                from urllib.parse import urlparse
+                                parsed = urlparse(url) if url else None
+                                source_name = parsed.netloc if parsed else None
+                            except Exception:
+                                source_name = None
+
+                            if url and content:
+                                insert_article_sql = (
+                                    """
+                                    INSERT INTO articles (article_title, content, article_url, source_name, publication_date, result_id)
+                                    VALUES (%s, %s, %s, %s, %s, %s)
+                                    ON CONFLICT (article_url) DO NOTHING
+                                    """
+                                )
+                                cursor.execute(
+                                    insert_article_sql,
+                                    (title or '', content, url, source_name or '', None, result_id)
+                                )
+
                         # Store entities in categories table
                         for item in results:
                             for text, label in item.get("entities", []):
@@ -136,6 +163,70 @@ def index():
                 print("❌ DB Insert Error:", e)
 
     return render_template('index.html', results=results)
+
+# -------- API: Scrape Top 5 and save to search_results --------
+@app.route('/api/scrape', methods=['POST'])
+def api_scrape():
+    try:
+        data = request.get_json(silent=True) or request.form
+        query = (data.get('query') or '').strip()
+        if not query:
+            return jsonify({'status': 'error', 'message': 'query is required'}), 400
+
+        serpapi_key = data.get('serpapi_key') or os.getenv("SERPAPI_API_KEY")
+        results = main_system(query, serpapi_key)
+
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                import json
+                results_json = json.dumps(results)
+                insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
+                cursor.execute(insert_result_sql, (query, results_json))
+                result_id = cursor.fetchone()['result_id']
+
+                if 'user_db_id' in session:
+                    insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s)"
+                    cursor.execute(insert_search_sql, (session['user_db_id'], query))
+
+                # Insert each article as its own row linked to this result_id
+                for item in results:
+                    url = item.get('url')
+                    title = item.get('title')
+                    content = item.get('content')
+                    # Derive source_name from domain
+                    source_name = None
+                    try:
+                        from urllib.parse import urlparse
+                        parsed = urlparse(url) if url else None
+                        source_name = parsed.netloc if parsed else None
+                    except Exception:
+                        source_name = None
+
+                    if url and content:
+                        insert_article_sql = (
+                            """
+                            INSERT INTO articles (article_title, content, article_url, source_name, publication_date, result_id)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (article_url) DO NOTHING
+                            """
+                        )
+                        cursor.execute(
+                            insert_article_sql,
+                            (title or '', content, url, source_name or '', None, result_id)
+                        )
+
+                # Optionally store entities to categories
+                for item in results:
+                    for text, label in item.get("entities", []):
+                        insert_entity_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
+                        cursor.execute(insert_entity_sql, (result_id, text, label))
+
+                db.commit()
+
+        return jsonify({'status': 'success', 'result_id': result_id, 'count': len(results)})
+    except Exception as e:
+        print("❌ /api/scrape error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to scrape and store results'}), 500
 
 # -------- Authentication (Flask) --------
 @app.route('/auth', methods=['GET'])
