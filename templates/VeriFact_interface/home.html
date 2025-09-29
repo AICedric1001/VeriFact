@@ -17,6 +17,9 @@
     <div class="app">
         <header class="topbar">
             <div class="left">
+                <button class="icon-btn" id="sidebarToggle" aria-label="Toggle Sidebar">
+                    <i class="fa fa-bars"></i>
+                </button>
                 <span class="avatar" aria-hidden="true"><i class="fa fa-user-circle"></i></span>
                 <span class="user-name">Sign In</span>
             </div>
@@ -43,7 +46,7 @@
                 <div class="divider"></div>
 
                 <a href="archive.html"><i class="fa fa-archive"></i>Archive</a>
-                <a href="#" id="signOutBtn" style="color: #e34234;"><i class="fa fa-sign-out" style="color: #e34234;"></i> Sign Out</a>
+                <a href="auth.html" style="color: #e34234;"><i class="fa fa-sign-out" style="color: #e34234;"></i> Sign Out</a>
 
                 <div class="divider"></div>
                 
@@ -54,32 +57,24 @@
 
         </header>
 
-        <!-- Tabs -->
-        <nav class="tabs" role="tablist" aria-label="Primary">
-            <button class="tab" role="tab" aria-selected="true">HISTORY</button>
-            <button class="tab active" role="tab" aria-selected="false">CHAT</button>
-        </nav>
-
-        <!--HISTORY TAB-->
-        <main class="content">
-            <section id="history-content" class="tab-content" style="display:none;">
-                <section class="section-header">
-                  <div class="title">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="title">
                     <span class="title-icon" aria-hidden="true"><i class="fa fa-history"></i></span>
                     <span>HISTORY</span>
-                  </div>
-
-                  <div class="actions">
+                </div>
+                <div class="actions">
                     <div class="search-box">
-                      <input type="text" placeholder="Search..." />
-                      <button><i class="fas fa-search"></i></button>
+                        <input type="text" placeholder="Search..." />
+                        <button><i class="fas fa-search"></i></button>
                     </div>
-
                     <button class="icon-btn" aria-label="Delete All"><i class="fa fa-trash"></i></button>
                     <label class="checkbox" aria-label="Select"><input type="checkbox"><span></span></label>
-                  </div>
-                </section>
+                </div>
+            </div>
 
+            <div class="sidebar-content">
                 <div class="accordion">
                     <div class="accordion-item">
                         <div class="accordion-header">
@@ -162,13 +157,18 @@
                     </div>
                 </div>
             </div>
-        </section>
+        </aside>
 
-        <!-- Floating Dropdown for More actions -->
-        <div id="floatingDropdown" class="dropdown-menu">
-          <button type="button"><i class="fa fa-edit"></i> Rename</button>
-          <button type="button"><i class="fa fa-archive"></i> Archive</button>
-      </div>
+        <!-- Sidebar Overlay -->
+        <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Floating Dropdown for More actions -->
+            <div id="floatingDropdown" class="dropdown-menu">
+              <button type="button"><i class="fa fa-edit"></i> Rename</button>
+              <button type="button"><i class="fa fa-archive"></i> Archive</button>
+          </div>
 
         <!--CHAT TAB-->
         <section id="chat-content" class="tab-content">
@@ -227,6 +227,27 @@
 
         </section>
         </main>
+
+        <!-- Feedback Modal -->
+        <div id="feedbackModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="feedbackTitle">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="feedbackTitle">Send Feedback</h3>
+                    <button class="icon-btn" type="button" aria-label="Close" data-close><i class="fa fa-times"></i></button>
+                </div>
+                <div class="modal-body">
+                    <label for="feedbackTextarea" class="sr-only">Your feedback</label>
+                    <textarea id="feedbackTextarea" maxlength="1000" placeholder="Tell us what we can improve..." rows="5"></textarea>
+                    <div class="modal-meta">
+                        <span><span id="charCount">0</span>/1000</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary" type="button" data-close>Cancel</button>
+                    <button id="sendFeedbackBtn" class="btn-primary" type="button"><i class="fa fa-paper-plane"></i> Send</button>
+                </div>
+            </div>
+        </div>
 
         <script src="js/home.js"></script>
 

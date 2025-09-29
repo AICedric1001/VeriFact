@@ -225,7 +225,36 @@
             });
         })();
 
+        // Sidebar toggle functionality
+        document.getElementById("sidebarToggle").addEventListener("click", function() {
+          const sidebar = document.getElementById("sidebar");
+          const overlay = document.getElementById("sidebarOverlay");
+          
+          sidebar.classList.toggle("open");
+          overlay.classList.toggle("show");
+        });
 
+        // Close sidebar when clicking overlay
+        document.getElementById("sidebarOverlay").addEventListener("click", function() {
+          const sidebar = document.getElementById("sidebar");
+          const overlay = document.getElementById("sidebarOverlay");
+          
+          sidebar.classList.remove("open");
+          overlay.classList.remove("show");
+        });
+
+        // Close sidebar with Escape key
+        document.addEventListener("keydown", function(e) {
+          if (e.key === "Escape") {
+            const sidebar = document.getElementById("sidebar");
+            const overlay = document.getElementById("sidebarOverlay");
+            
+            if (sidebar.classList.contains("open")) {
+              sidebar.classList.remove("open");
+              overlay.classList.remove("show");
+            }
+          }
+        });
 
         // Settings dropdown (topbar)
         document.getElementById("settingsBtn").addEventListener("click", function() {
@@ -303,24 +332,6 @@
         });
         window.addEventListener('resize', () => {
             floatingDropdown.style.display = 'none';
-        });
-
-        // Tab functionality
-        document.querySelectorAll('.tabs .tab').forEach((tab, idx) => {
-            tab.addEventListener('click', function() {
-                // Remove active from all tabs
-                document.querySelectorAll('.tabs .tab').forEach(t => {
-                    t.classList.remove('active');
-                    t.setAttribute('aria-selected', 'true');
-                });
-                // Set active on clicked tab
-                tab.classList.add('active');
-                tab.setAttribute('aria-selected', 'false');
-
-                // Show/hide content
-                document.getElementById('history-content').style.display = idx === 0 ? '' : 'none';
-                document.getElementById('chat-content').style.display = idx === 1 ? '' : 'none';
-            });
         });
 
 
@@ -432,7 +443,7 @@
                     });
 
                     // Reset "select all" checkbox
-                    const selectAllCheckbox = document.querySelector('.section-header .checkbox input');
+                    const selectAllCheckbox = document.querySelector('.sidebar-header .checkbox input');
                     if (selectAllCheckbox) {
                       selectAllCheckbox.checked = false;
                       selectAllCheckbox.indeterminate = false;
@@ -464,7 +475,7 @@
             
             function performSearch() {
               const searchTerm = searchInput.value.toLowerCase().trim();
-              const accordionItems = document.querySelectorAll('#history-content .accordion-item');
+              const accordionItems = document.querySelectorAll('.sidebar-content .accordion-item');
               
               if (searchTerm === '') {
                 // Show all items if search is empty
@@ -500,8 +511,8 @@
 
           // Checkbox selection functionality
           document.addEventListener('DOMContentLoaded', function() {
-            const selectAllCheckbox = document.querySelector('.section-header .checkbox input');
-            const itemCheckboxes = document.querySelectorAll('.accordion-item .checkbox input');
+            const selectAllCheckbox = document.querySelector('.sidebar-header .checkbox input');
+            const itemCheckboxes = document.querySelectorAll('.sidebar-content .accordion-item .checkbox input');
             const deleteAllBtn = document.querySelector('button[aria-label="Delete All"]');
 
             // Select all functionality
@@ -524,7 +535,7 @@
             });
 
             function updateDeleteButtonState() {
-              const checkedBoxes = document.querySelectorAll('.accordion-item .checkbox input:checked');
+              const checkedBoxes = document.querySelectorAll('.sidebar-content .accordion-item .checkbox input:checked');
               
               if (deleteAllBtn) {
                 if (checkedBoxes.length > 0) {
@@ -538,7 +549,7 @@
             }
 
             function updateSelectAllState() {
-              const checkedBoxes = document.querySelectorAll('.accordion-item .checkbox input:checked');
+              const checkedBoxes = document.querySelectorAll('.sidebar-content .accordion-item .checkbox input:checked');
               const totalBoxes = itemCheckboxes.length;
 
               if (selectAllCheckbox) {
@@ -703,7 +714,7 @@
             
             // Delete key to delete selected items
             if (e.key === 'Delete' && !e.target.matches('input, textarea')) {
-              const checkedBoxes = document.querySelectorAll('.accordion-item .checkbox input:checked');
+              const checkedBoxes = document.querySelectorAll('.sidebar-content .accordion-item .checkbox input:checked');
               if (checkedBoxes.length > 0) {
                 const deleteAllBtn = document.querySelector('button[aria-label="Delete All"]');
                 if (deleteAllBtn) {
@@ -715,11 +726,62 @@
             // Ctrl/Cmd + A to select all items
             if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !e.target.matches('input, textarea')) {
               e.preventDefault();
-              const selectAllCheckbox = document.querySelector('.section-header .checkbox input');
+              const selectAllCheckbox = document.querySelector('.sidebar-header .checkbox input');
               if (selectAllCheckbox) {
                 selectAllCheckbox.checked = true;
                 selectAllCheckbox.dispatchEvent(new Event('change'));
               }
+            }
+          });
+
+          // Theme mode switching
+          document.addEventListener('DOMContentLoaded', function() {
+            const root = document.documentElement; // <html>
+            const LIGHT = 'light';
+            const DARK = 'dark';
+            const DISPLAY = 'display';
+            const STORAGE_KEY = 'verifact_theme';
+
+            function applyTheme(mode) {
+              if (mode === LIGHT) {
+                root.setAttribute('data-theme', 'light');
+              } else if (mode === DARK) {
+                root.setAttribute('data-theme', 'dark');
+              } else {
+                root.removeAttribute('data-theme');
+              }
+            }
+
+            // Restore saved theme or default to display
+            const saved = localStorage.getItem(STORAGE_KEY) || DISPLAY;
+            applyTheme(saved);
+
+            const lightBtn = document.getElementById('lightModeBtn');
+            const darkBtn = document.getElementById('darkModeBtn');
+            const displayBtn = document.getElementById('displayModeBtn');
+
+            if (lightBtn) {
+              lightBtn.addEventListener('click', function() {
+                applyTheme(LIGHT);
+                localStorage.setItem(STORAGE_KEY, LIGHT);
+                
+              });
+            }
+
+            if (darkBtn) {
+              darkBtn.addEventListener('click', function() {
+                applyTheme(DARK);
+                localStorage.setItem(STORAGE_KEY, DARK);
+                
+              });
+            }
+
+            if (displayBtn) {
+              displayBtn.addEventListener('click', function() {
+                applyTheme(DISPLAY);
+                localStorage.setItem(STORAGE_KEY, DISPLAY);
+                
+              });
             }
           });
 
