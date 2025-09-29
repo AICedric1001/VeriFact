@@ -206,10 +206,37 @@
             });
           }
 
-          // Load chat history when page loads
+          // Load user information and chat history when page loads
           document.addEventListener('DOMContentLoaded', function() {
+            loadUserInfo();
             loadChatHistory();
           });
+
+          // Load current user information
+          function loadUserInfo() {
+            fetch('/api/user', {
+              method: 'GET',
+              credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.status === 'success' && data.user) {
+                // Update the username display
+                const userDisplayName = document.getElementById('userDisplayName');
+                if (userDisplayName) {
+                  userDisplayName.textContent = data.user.username;
+                }
+              } else {
+                // User not logged in or error occurred
+                console.log('User not logged in or error:', data.message);
+                // Keep "Sign In" as default
+              }
+            })
+            .catch(error => {
+              console.error('Error loading user info:', error);
+              // Keep "Sign In" as default on error
+            });
+          }
 
           //Accordion Card
         (function(){
@@ -852,6 +879,12 @@
                   return res.json().then(function(json) { return { ok: res.ok, json: json }; });
                 }).then(function(result) {
                   if (result.ok) {
+                    // Reset username display
+                    const userDisplayName = document.getElementById('userDisplayName');
+                    if (userDisplayName) {
+                      userDisplayName.textContent = 'Sign In';
+                    }
+                    
                     // Redirect to auth page after successful logout
                     window.location.href = '/auth';
                   } else {
@@ -859,6 +892,13 @@
                   }
                 }).catch(function(err) {
                   console.error('Logout error:', err);
+                  
+                  // Reset username display even if API call fails
+                  const userDisplayName = document.getElementById('userDisplayName');
+                  if (userDisplayName) {
+                    userDisplayName.textContent = 'Sign In';
+                  }
+                  
                   // Still redirect even if API call fails
                   window.location.href = '/auth';
                 });

@@ -35,7 +35,16 @@ def get_db_connection():
 
 @app.before_request
 def assign_user():
-    if 'user_id' not in session:
+    # Only create anonymous users for specific routes that need it
+    # Skip this for auth routes, API routes, and static files
+    if request.endpoint in ['auth_page', 'api_login', 'api_signup', 'api_logout', 'api_user', 'serve_auth_css', 'serve_auth_js']:
+        return
+    
+    # Only create anonymous user if:
+    # 1. No user_id in session AND
+    # 2. No user_db_id in session AND  
+    # 3. This is not an API route that handles authentication
+    if 'user_id' not in session and 'user_db_id' not in session:
         session['user_id'] = str(uuid.uuid4())
         try:
             with get_db_connection() as db:
@@ -51,7 +60,7 @@ def assign_user():
                         session['user_db_id'] = user['user_id']
         except Exception as e:
             print("❌ User creation error:", e)
-    elif 'user_db_id' not in session:
+    elif 'user_db_id' not in session and 'user_id' in session:
         # If user_id exists but user_db_id doesn't, get the id
         try:
             with get_db_connection() as db:
@@ -220,6 +229,36 @@ def api_login():
 def home():
     # Render the home interface
     return render_template('VeriFact_interface/home.html')
+
+@app.route('/api/user', methods=['GET'])
+def get_current_user():
+    """Get current user information"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        with get_db_connection() as db:
+            with db.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                # Get user information
+                cursor.execute("SELECT user_id, username, role, uuid FROM users WHERE user_id = %s", (session['user_db_id'],))
+                user = cursor.fetchone()
+                
+                if not user:
+                    return jsonify({'status': 'error', 'message': 'User not found'}), 404
+                
+                return jsonify({
+                    'status': 'success',
+                    'user': {
+                        'id': user['user_id'],
+                        'username': user['username'],
+                        'role': user['role'],
+                        'uuid': user['uuid']
+                    }
+                })
+                
+    except Exception as e:
+        print("❌ Get user error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to get user information'}), 500
 
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
