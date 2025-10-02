@@ -36,8 +36,35 @@
               if (data.status === 'success') {
                 // Generate bot responses (simulate AI processing)
                 if (data.is_first_message) {
-                  // First message - use search_id
-                  generateBotResponses(data.search_id, chatBox, true);
+                  // First message - trigger scraping using latest searches entry (no query in body)
+                  const loadingMsg = document.createElement('div');
+                  loadingMsg.className = 'bot-message';
+                  loadingMsg.textContent = 'Processing sources…';
+                  chatBox.appendChild(loadingMsg);
+                  chatBox.scrollTop = chatBox.scrollHeight;
+
+                  fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({})
+                  })
+                  .then(res => res.json())
+                  .then(scrape => {
+                    if (loadingMsg && loadingMsg.parentNode) loadingMsg.parentNode.removeChild(loadingMsg);
+                    if (scrape && scrape.status === 'success') {
+                      // Render with the new result_id
+                      generateBotResponses(scrape.result_id, chatBox, true);
+                    } else {
+                      console.error('Scrape failed:', scrape && scrape.message);
+                      showNotification('Failed to scrape sources. Please try again.', 'error');
+                    }
+                  })
+                  .catch(err => {
+                    if (loadingMsg && loadingMsg.parentNode) loadingMsg.parentNode.removeChild(loadingMsg);
+                    console.error('Error triggering scrape:', err);
+                    showNotification('Error triggering scrape. Please try again.', 'error');
+                  });
                 } else {
                   // Follow-up message - use chat_id
                   generateBotResponses(data.chat_id, chatBox, false);

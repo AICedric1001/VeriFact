@@ -9,7 +9,12 @@ nlp = spacy.load("en_core_web_sm")
 
 # --- Function to search using SerpApi ---
 def search_serpapi(query, api_key=None):
-    effective_key = api_key or os.getenv("SERPAPI_API_KEY")
+    # Accept either SERPAPI_API_KEY or SERPAPI_KEY
+    effective_key = (
+        api_key
+        or os.getenv("SERPAPI_API_KEY")
+        or os.getenv("SERPAPI_KEY")
+    )
     if not effective_key:
         raise ValueError("SERPAPI_API_KEY not provided. Set env var or pass api_key.")
 
@@ -40,11 +45,18 @@ def search_serpapi(query, api_key=None):
 # --- Function to scrape and extract article text ---
 def extract_article_text(url):
     try:
+        print(f"  ⏳ Downloading: {url}")
         article = Article(url)
         article.download()
         article.parse()
-        return article.text
-    except:
+        text = (article.text or '').strip()
+        if not text:
+            print(f"  ⚠️  No extractable text: {url}")
+            return None
+        print(f"  ✅ Parsed ({len(text)} chars): {url}")
+        return text
+    except Exception as e:
+        print(f"  ❌ Extract failed: {url} :: {e}")
         return None
 
 # --- NLP Entity Extraction ---
@@ -57,28 +69,51 @@ def main_system(query, api_key=None):
     print(f"\n🔎 Searching for: {query}")
 
     # Choose search method
-    if api_key or os.getenv("SERPAPI_API_KEY"):
-        top_results = search_serpapi(query, api_key)
-        links_with_meta = top_results  # list of dicts with title, url
-    else:
-        # Fallback to simple google search (no API); limit to 5
-        links_with_meta = [{"title": None, "url": url} for url in list(search(query, num_results=5))]
+    try:
+        if api_key or os.getenv("SERPAPI_API_KEY"):
+            print("🛰️  Using SerpAPI for search…")
+            top_results = search_serpapi(query, api_key)
+            links_with_meta = top_results  # list of dicts with title, url
+        else:
+            print("🧭 Using basic Google search fallback…")
+            # Try new signature; if unsupported, fall back to older 'num_results'
+            try:
+                urls = list(search(query, tld="com", lang="en", num=10, stop=5, pause=2.0))
+            except TypeError:
+                # Older googlesearch versions use 'num_results'
+                urls = list(search(query, num_results=5))
+            links_with_meta = [{"title": None, "url": url} for url in urls]
+    except Exception as e:
+        print(f"❌ Search failed: {e}")
+        links_with_meta = []
+
+    print(f"🔗 Found {len(links_with_meta)} links")
+    if len(links_with_meta) == 0:
+        print("⚠️  No links from fallback. Consider setting SERPAPI_API_KEY or retrying with a more specific query.")
 
     results = []
-    for item in links_with_meta:
-        url = item["url"]
+    for idx, item in enumerate(links_with_meta[:5], start=1):
+        url = item.get("url")
         title = item.get("title")
+        if not url:
+            continue
+        print(f"\n[{idx}/5] ▶️  Fetching article")
         content = extract_article_text(url)
         if content and len(content.strip()) > 50:
+            print("  🧠 Running NER…")
             analysis = analyze_text(content)
+            print(f"  🧾 Entities extracted: {len(analysis)}")
             results.append({
                 "title": title,
                 "url": url,
                 "content": content,
                 "entities": analysis
             })
+        else:
+            print("  ⏭️  Skipped: insufficient content")
 
-    # Already limited to top 5 when using SerpAPI; ensure max 5 regardless
+    print(f"✅ Completed. Articles kept: {len(results)}")
+    # Ensure max 5
     return results[:5]
 
 # --- User Input and Output ---
