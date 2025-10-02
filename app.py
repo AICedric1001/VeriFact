@@ -17,10 +17,19 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 from ai_summary import generate_summary_from_text
 from werkzeug.security import generate_password_hash, check_password_hash
+import spacy
+import re
 
 app = Flask(__name__)
 
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback-insecure-dev-key")
+
+# Load SpaCy model for category extraction
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    print("⚠️ SpaCy model 'en_core_web_sm' not found. Please install it with: python -m spacy download en_core_web_sm")
+    nlp = None
 
 # Config for image uploads
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'img')
@@ -32,6 +41,42 @@ if not os.path.exists(UPLOAD_FOLDER):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def extract_categories_from_search(search_text):
+    """
+    Extract categories/keywords from user search text using SpaCy.
+    Returns a list of unique, cleaned category words.
+    """
+    if not nlp or not search_text:
+        return []
+    
+    # Process the search text with SpaCy
+    doc = nlp(search_text.lower())
+    
+    # Extract relevant entities and keywords
+    categories = set()
+    
+    # Extract named entities (PERSON, ORG, GPE, etc.)
+    for ent in doc.ents:
+        if ent.label_ in ['PERSON', 'ORG', 'GPE', 'EVENT', 'WORK_OF_ART', 'LAW', 'LANGUAGE']:
+            # Clean and normalize the entity text
+            clean_text = re.sub(r'[^\w\s]', '', ent.text.strip())
+            if len(clean_text) > 2:  # Only include words longer than 2 characters
+                categories.add(clean_text)
+    
+    # Extract important nouns and adjectives
+    for token in doc:
+        if (token.pos_ in ['NOUN', 'PROPN'] and 
+            not token.is_stop and 
+            not token.is_punct and 
+            not token.is_space and
+            len(token.text) > 2):
+            clean_text = re.sub(r'[^\w\s]', '', token.text.strip())
+            if clean_text:
+                categories.add(clean_text)
+    
+    # Convert set to list and return
+    return list(categories)
 
 def get_db_connection():
     return psycopg2.connect(
@@ -105,9 +150,11 @@ def index():
                         result_id = cursor.fetchone()['result_id']
                         
                         # Insert into searches table to link with user
+                        search_id = None
                         if 'user_db_id' in session:
-                            insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s)"
+                            insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id"
                             cursor.execute(insert_search_sql, (session['user_db_id'], query))
+                            search_id = cursor.fetchone()['search_id']
                         
                         # Store each article as its own row in articles table
                         for item in results:
@@ -136,11 +183,20 @@ def index():
                                     (title or '', content, url, source_name or '', None, result_id)
                                 )
 
-                        # Store entities in categories table
-                        for item in results:
-                            for text, label in item.get("entities", []):
-                                insert_entity_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
-                                cursor.execute(insert_entity_sql, (result_id, text, label))
+                        # Extract categories from user search text and store in categories table
+                        if search_id:  # Only extract categories if we have a search_id
+                            search_categories = extract_categories_from_search(query)
+                            for category in search_categories:
+                                # Check if this category already exists for this search to prevent duplicates
+                                check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(entity_text) = LOWER(%s)"
+                                cursor.execute(check_sql, (search_id, category))
+                                existing = cursor.fetchone()
+                                
+                                if not existing:
+                                    insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
+                                    cursor.execute(insert_category_sql, (search_id, category, 'SEARCH_KEYWORD'))
+                        
+                        # Note: We only store categories extracted from search query text, not from scraped content
                         
                         # Generate AI summary using Gemini and store in usersummaries table
                         if 'user_db_id' in session and results:
@@ -215,9 +271,11 @@ def api_scrape():
                 cursor.execute(insert_result_sql, (query, results_json))
                 result_id = cursor.fetchone()['result_id']
 
+                search_id = None
                 if 'user_db_id' in session:
-                    insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s)"
+                    insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id"
                     cursor.execute(insert_search_sql, (session['user_db_id'], query))
+                    search_id = cursor.fetchone()['search_id']
 
                 # Insert each article as its own row linked to this result_id
                 for item in results:
@@ -246,11 +304,20 @@ def api_scrape():
                             (title or '', content, url, source_name or '', None, result_id)
                         )
 
-                # Optionally store entities to categories
-                for item in results:
-                    for text, label in item.get("entities", []):
-                        insert_entity_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
-                        cursor.execute(insert_entity_sql, (result_id, text, label))
+                # Extract categories from user search text and store in categories table
+                if search_id:  # Only extract categories if we have a search_id
+                    search_categories = extract_categories_from_search(query)
+                    for category in search_categories:
+                        # Check if this category already exists for this search to prevent duplicates
+                        check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(entity_text) = LOWER(%s)"
+                        cursor.execute(check_sql, (search_id, category))
+                        existing = cursor.fetchone()
+                        
+                        if not existing:
+                            insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
+                            cursor.execute(insert_category_sql, (search_id, category, 'SEARCH_KEYWORD'))
+                
+                # Note: We only store categories extracted from search query text, not from scraped content
 
                 db.commit()
 
