@@ -1,8 +1,8 @@
 FILTERED_DOMAINS = [
     "https://www.rappler.com/",
-    "https://www.philstar.com/",
+    "https://www.philstar.com/", #Checked
     "https://www.inquirer.net/",
-    "https://www.abs-cbn.com/",
+    "https://www.abs-cbn.com/", #Checked
     "https://www.verafiles.org/",
-    "https://www.tsek.ph/"
+    "https://www.tsek.ph/" #Checked
 ]

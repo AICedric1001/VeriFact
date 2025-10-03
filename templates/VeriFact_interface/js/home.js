@@ -31,8 +31,7 @@ function handleTopbarZoomHide() {
 
 window.addEventListener('resize', handleTopbarZoomHide);
 window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
-
-
+ 
  // Send Message
           function sendMessage() {
             const input = document.getElementById("userInput");

@@ -2,8 +2,17 @@ from flask import Flask, render_template, request, redirect, session, jsonify, s
 import psycopg2
 import psycopg2.extras
 from scraper import main_system, search_serpapi
-import uuid
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 import os
+# Normalize SERPAPI env var names so either works
+if os.getenv("SERPAPI_KEY") and not os.getenv("SERPAPI_API_KEY"):
+    os.environ["SERPAPI_API_KEY"] = os.getenv("SERPAPI_KEY")
+import uuid
+
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from ai_summary import generate_summary_from_text
@@ -73,7 +82,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="radgelwashere4453",  #Change this to your own password
+        password="Corl4453",  #Change this to your own password
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -227,7 +236,29 @@ def api_scrape():
         data = request.get_json(silent=True) or request.form
         query = (data.get('query') or '').strip()
         if not query:
-            return jsonify({'status': 'error', 'message': 'query is required'}), 400
+            # If no query provided, try to load the most recent one for this user
+            if 'user_db_id' not in session:
+                return jsonify({'status': 'error', 'message': 'query is required'}), 400
+            try:
+                with get_db_connection() as db:
+                    with db.cursor() as cursor:
+                        cursor.execute(
+                            """
+                            SELECT query_text
+                            FROM searches
+                            WHERE account_id = %s
+                            ORDER BY timestamp DESC
+                            LIMIT 1
+                            """,
+                            (session['user_db_id'],)
+                        )
+                        row = cursor.fetchone()
+                        if row and row.get('query_text'):
+                            query = (row['query_text'] or '').strip()
+                        else:
+                            return jsonify({'status': 'error', 'message': 'query is required'}), 400
+            except Exception:
+                return jsonify({'status': 'error', 'message': 'query is required'}), 400
 
         serpapi_key = data.get('serpapi_key') or os.getenv("SERPAPI_API_KEY")
         results = main_system(query, serpapi_key)
