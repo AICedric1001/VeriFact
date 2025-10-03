@@ -1,3 +1,38 @@
+// Hide section header and lift accuracy card at 300% and 400% zoom
+function handleSectionHeaderAndAccuracyCardZoom() {
+  const sectionHeader = document.querySelector('.section-header');
+  const accuracyCard = document.querySelector('.accuracy-card');
+  if (!sectionHeader || !accuracyCard) return;
+  if (window.devicePixelRatio >= 4) {
+    sectionHeader.style.display = 'none';
+    accuracyCard.style.marginTop = '2px';
+  } else if (window.devicePixelRatio >= 3) {
+    sectionHeader.style.display = 'none';
+    accuracyCard.style.marginTop = '10px';
+  } else {
+    sectionHeader.style.display = '';
+    accuracyCard.style.marginTop = '';
+  }
+}
+
+window.addEventListener('resize', handleSectionHeaderAndAccuracyCardZoom);
+window.addEventListener('DOMContentLoaded', handleSectionHeaderAndAccuracyCardZoom);
+// Hide topbar at 250%+ zoom scaling
+function handleTopbarZoomHide() {
+  const topbar = document.querySelector('.topbar');
+  if (!topbar) return;
+  // Use window.devicePixelRatio as a proxy for zoom level
+  if (window.devicePixelRatio >= 2.5) {
+    topbar.style.display = 'none';
+  } else {
+    topbar.style.display = '';
+  }
+}
+
+window.addEventListener('resize', handleTopbarZoomHide);
+window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
+
+
  // Send Message
           function sendMessage() {
             const input = document.getElementById("userInput");
@@ -36,8 +71,35 @@
               if (data.status === 'success') {
                 // Generate bot responses (simulate AI processing)
                 if (data.is_first_message) {
-                  // First message - use search_id
-                  generateBotResponses(data.search_id, chatBox, true);
+                  // First message - trigger scraping using latest searches entry (no query in body)
+                  const loadingMsg = document.createElement('div');
+                  loadingMsg.className = 'bot-message';
+                  loadingMsg.textContent = 'Processing sources…';
+                  chatBox.appendChild(loadingMsg);
+                  chatBox.scrollTop = chatBox.scrollHeight;
+
+                  fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({})
+                  })
+                  .then(res => res.json())
+                  .then(scrape => {
+                    if (loadingMsg && loadingMsg.parentNode) loadingMsg.parentNode.removeChild(loadingMsg);
+                    if (scrape && scrape.status === 'success') {
+                      // Render with the new result_id
+                      generateBotResponses(scrape.result_id, chatBox, true);
+                    } else {
+                      console.error('Scrape failed:', scrape && scrape.message);
+                      showNotification('Failed to scrape sources. Please try again.', 'error');
+                    }
+                  })
+                  .catch(err => {
+                    if (loadingMsg && loadingMsg.parentNode) loadingMsg.parentNode.removeChild(loadingMsg);
+                    console.error('Error triggering scrape:', err);
+                    showNotification('Error triggering scrape. Please try again.', 'error');
+                  });
                 } else {
                   // Follow-up message - use chat_id
                   generateBotResponses(data.chat_id, chatBox, false);
