@@ -1,3 +1,37 @@
+// Hide section header and lift accuracy card at 300% and 400% zoom
+function handleSectionHeaderAndAccuracyCardZoom() {
+  const sectionHeader = document.querySelector('.section-header');
+  const accuracyCard = document.querySelector('.accuracy-card');
+  if (!sectionHeader || !accuracyCard) return;
+  if (window.devicePixelRatio >= 4) {
+    sectionHeader.style.display = 'none';
+    accuracyCard.style.marginTop = '2px';
+  } else if (window.devicePixelRatio >= 3) {
+    sectionHeader.style.display = 'none';
+    accuracyCard.style.marginTop = '10px';
+  } else {
+    sectionHeader.style.display = '';
+    accuracyCard.style.marginTop = '';
+  }
+}
+
+window.addEventListener('resize', handleSectionHeaderAndAccuracyCardZoom);
+window.addEventListener('DOMContentLoaded', handleSectionHeaderAndAccuracyCardZoom);
+// Hide topbar at 250%+ zoom scaling
+function handleTopbarZoomHide() {
+  const topbar = document.querySelector('.topbar');
+  if (!topbar) return;
+  // Use window.devicePixelRatio as a proxy for zoom level
+  if (window.devicePixelRatio >= 2.5) {
+    topbar.style.display = 'none';
+  } else {
+    topbar.style.display = '';
+  }
+}
+
+window.addEventListener('resize', handleTopbarZoomHide);
+window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
+ 
  // Send Message
           function sendMessage() {
             const input = document.getElementById("userInput");
