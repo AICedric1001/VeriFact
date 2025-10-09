@@ -218,6 +218,19 @@ body {
 .user-name { 
   color: var(--muted); 
   font-weight: 600; 
+  /* If `.user-name` is a button, remove native button styles so it looks like text */
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.user-name:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(233,238,243,0.04);
 }
 
 .brand {
@@ -376,6 +389,9 @@ body {
   border-bottom: 2px solid var(--border);
   width: 100%;
   margin-bottom: 10px;
+  position: relative;
+  z-index: 100; /* ensure section header and its dropdowns are above chat content */
+  overflow: visible; /* allow dropdown to extend beyond section header */
 }
 
 .section-header .title {
@@ -396,6 +412,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px; /* spacing between search, trash, checkbox */
+  position: relative; /* ensure dropdown positions relative to actions container */
 }
 
 
@@ -428,7 +445,7 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   max-height: calc(100vh - 8vh - 48px); /* 8vh for topbar, 48px for tabs */
-  overflow-y: auto;
+  overflow: visible; /* allow dropdowns to extend beyond content area */
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -676,7 +693,8 @@ transform: translate(-50%, -58%);
   
   .sidebar {
     width: 300px;
-    left: -300px;
+    /* Do not offset with left; rely on transform-based off-canvas */
+    left: 0;
   }
 }
 
@@ -689,7 +707,8 @@ transform: translate(-50%, -58%);
   
   .sidebar {
     width: 280px;
-    left: -280px;
+    /* Do not offset with left; rely on transform-based off-canvas */
+    left: 0;
   }
   
   .sidebar-header {
@@ -712,7 +731,14 @@ transform: translate(-50%, -58%);
   
   .sidebar {
     width: 100%;
-    left: -100%;
+    /* Do not offset with left; rely on transform off-canvas only */
+    left: 0;
+  }
+
+  /* Ensure open state fully brings the sidebar into view on tiny screens */
+  .app.sidebar-open .sidebar {
+    left: 0;
+    transform: translateX(0%);
   }
 }
 
@@ -720,34 +746,36 @@ transform: translate(-50%, -58%);
 .dropdown {
   position: relative;
   display: inline-block;
+  z-index: 100; /* ensure dropdown container is above other elements */
 }
 
 /* Dropdown menu */
 .dropdown-menu {
   position: absolute;
-  top: 110%;
+  top: calc(100% + 6px); /* slight gap below the button */
   right: 0;
   background: #1b2b38;
   border-radius: 8px;
   min-width: 200px;
-  width: 220px;
+  width: 240px;
+  padding: 6px 0; /* breathing room for items */
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
   display: none;
-  flex-direction: column;
-  overflow: hidden;
-  z-index: 1000;
+  z-index: 5000; /* ensure it overlays fixed chat container and other layers */
 }
-
 /* Dropdown menu links */
 .dropdown-menu a {
   padding: 10px 14px;
   text-decoration: none;
   color: var(--text);
   font-size: 14px;
-  display: flex;
+  display: block;
   align-items: center;
   gap: 10px;
   transition: background 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .dropdown-menu a:hover {
@@ -755,7 +783,7 @@ transform: translate(-50%, -58%);
 }
 
 .dropdown-menu.show {
-  display: flex;
+  display: block;
 }
 
 /* Divider */
@@ -763,6 +791,7 @@ transform: translate(-50%, -58%);
   height: 1px;
   background: rgba(255,255,255,0.2);
   margin: 6px 0;
+  flex-shrink: 0;
 }
 
 .dropdown-menu button {
@@ -771,12 +800,24 @@ transform: translate(-50%, -58%);
   text-align: left;
   padding: 10px 14px;
   font-size: 14px;
-  color: rgba(255,255,255,0.95);
+  color: var(--text);
   cursor: pointer;
-  display: flex;
+  display: block;
   align-items: center;
   gap: 8px;
   width: 100%;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Ensure all direct children render as rows and inherit text color */
+.dropdown-menu > * {
+  display: block;
+  color: var(--text);
+}
+
+.dropdown-menu i {
+  margin-right: 10px;
 }
 
 .dropdown-menu button:hover {
@@ -784,7 +825,10 @@ transform: translate(-50%, -58%);
 }
 
 .dropdown.open .dropdown-menu {
-  display: flex;
+  display: block !important; /* render as normal block menu */
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 #floatingDropdown {

@@ -494,29 +494,88 @@ document.addEventListener("keydown", function(e) {
   }
 });
 
-// Settings dropdown (topbar)
-document.getElementById("settingsBtn").addEventListener("click", function() {
-  document.getElementById("settingsMenu").classList.toggle("show");
-});
-window.addEventListener("click", function(e) {
-  if (!e.target.closest(".dropdown")) {
-    document.getElementById("settingsMenu").classList.remove("show");
-  }
-});
+// Settings dropdown (topbar) — render as fixed popup attached to <body> to avoid clipping
+document.addEventListener('DOMContentLoaded', function() {
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsMenu = document.getElementById('settingsMenu');
+  const dropdownWrapper = settingsBtn ? settingsBtn.closest('.dropdown') : null;
 
-document.querySelectorAll(".dropdown .icon-btn").forEach(btn => {
-  btn.addEventListener("click", (e) => {
-    const parent = btn.closest(".dropdown");
-    parent.classList.toggle("open");
-    document.querySelectorAll(".dropdown").forEach(d => {
-      if (d !== parent) d.classList.remove("open");
-    });
+  if (!settingsBtn || !settingsMenu) return;
+
+  function openSettingsMenu() {
+    // Attach to body so it's not constrained by parents
+    if (settingsMenu.parentElement !== document.body) {
+      document.body.appendChild(settingsMenu);
+    }
+    // Make visible off-screen to measure
+    settingsMenu.style.visibility = 'hidden';
+    settingsMenu.style.display = 'block';
+    settingsMenu.style.position = 'fixed';
+    settingsMenu.style.zIndex = '5000';
+
+    const rect = settingsBtn.getBoundingClientRect();
+    const menuWidth = settingsMenu.offsetWidth;
+    const gap = 6;
+
+    let left = rect.right - menuWidth; // right align under the gear
+    let top = rect.bottom + gap;
+    // Keep within viewport horizontally
+    if (left < 8) left = 8;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = window.innerWidth - menuWidth - 8;
+    }
+    // Keep within viewport vertically
+    const menuHeight = settingsMenu.offsetHeight;
+    if (top + menuHeight > window.innerHeight - 8) {
+      // place above the button if there is not enough space below
+      top = Math.max(8, rect.top - gap - menuHeight);
+    }
+
+    settingsMenu.style.left = left + 'px';
+    settingsMenu.style.top = top + 'px';
+    settingsMenu.style.visibility = 'visible';
+    settingsMenu.dataset.open = 'true';
+    if (dropdownWrapper) dropdownWrapper.classList.add('open');
+  }
+
+  function closeSettingsMenu() {
+    settingsMenu.style.display = 'none';
+    settingsMenu.style.visibility = '';
+    settingsMenu.style.left = '';
+    settingsMenu.style.top = '';
+    settingsMenu.style.position = '';
+    settingsMenu.dataset.open = 'false';
+    if (dropdownWrapper) dropdownWrapper.classList.remove('open');
+  }
+
+  settingsBtn.addEventListener('click', function(e) {
+    e.preventDefault();
     e.stopPropagation();
+    if (settingsMenu.dataset.open === 'true') {
+      closeSettingsMenu();
+    } else {
+      openSettingsMenu();
+    }
+  });
+
+  // Close on outside click / ESC / resize / scroll
+  window.addEventListener('click', function(e) {
+    if (settingsMenu.dataset.open === 'true' && !e.target.closest('#settingsMenu') && e.target !== settingsBtn) {
+      closeSettingsMenu();
+    }
+  });
+  window.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && settingsMenu.dataset.open === 'true') closeSettingsMenu();
+  });
+  window.addEventListener('scroll', function() {
+    if (settingsMenu.dataset.open === 'true') closeSettingsMenu();
+  }, true);
+  window.addEventListener('resize', function() {
+    if (settingsMenu.dataset.open === 'true') closeSettingsMenu();
   });
 });
-document.addEventListener("click", () => {
-  document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("open"));
-});
+
+// Generic dropdown handler removed - settings dropdown has its own specific handler above
 
 
 
