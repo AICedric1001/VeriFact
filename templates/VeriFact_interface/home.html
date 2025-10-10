@@ -18,42 +18,15 @@
     <div class="app">
         <header class="topbar">
             <div class="left">
-                <button class="icon-btn" id="sidebarToggle" aria-label="Toggle Sidebar">
-                    <i class="fa fa-bars"></i>
-                </button>
-                <span class="avatar" aria-hidden="true"><i class="fa fa-user-circle"></i></span>
-                <span class="user-name">Sign In</span>
+                <!-- left intentionally empty; section header holds main controls for chat -->
             </div>
             <div class="brand" aria-label="VeriFact">
                 <span class="brand-veri">Veri</span><span class="brand-fact">Fact</span>
             </div>
 
             <div class="right">
-            <div class="dropdown">
-                <button class="icon-btn" id="settingsBtn" aria-label="Settings">
-                <i class="fa fa-cog"></i>
-                </button>
-                <div class="dropdown-menu" id="settingsMenu">
-                <a href="about_verifact.html"><i class="fa fa-info-circle"></i> About VeriFact</a>
-                <a href="guide.html"><i class="fa fa-book"></i> Guide</a>
-                <button type="button" id="openFeedbackModal"><i class="fa fa-comment"></i> Send Feedback</button>
-
-                <div class="divider"></div>
-                <button type="button" id="lightModeBtn"><i class="fa fa-sun"></i> Light Mode</button>
-                <button type="button" id="darkModeBtn"><i class="fa fa-moon"></i> Dark Mode</button>
-                <button type="button" id="displayModeBtn"><i class="fa fa-adjust"></i> Display Mode</button>
-
-
-                <div class="divider"></div>
-
-                <a href="archive.html"><i class="fa fa-archive"></i>Archive</a>
-                <a href="auth.html" style="color: #e34234;"><i class="fa fa-sign-out" style="color: #e34234;"></i> Sign Out</a>
-
-                <div class="divider"></div>
-                
-                <a href="#"><i class="fa fa-star"></i> Upgrade to Plus</a>
-                </div>
-            </div>
+                <button class="user-name" id="userDisplayName">Sign In</button>
+                <span class="avatar" aria-hidden="true"><i class="fa fa-user-circle"></i></span>
             </div>
 
         </header>
@@ -177,13 +150,37 @@
             <section id="chat-content" class="tab-content">
                 <section class="section-header">
                     <div class="title">
+                        <button class="icon-btn" id="sidebarToggle" aria-label="Toggle Sidebar"><i class="fa fa-bars"></i></button>
                         <span class="title-icon" aria-hidden="true"><i class="fa fa-comments"></i></span>
                         <span>CHAT</span>
                     </div>
-                    <div class="actions">
-                      <button class="icon-btn" aria-label="Save All"><i class="fa fa-floppy-disk"></i></button>
-                      <button class="icon-btn" aria-label="Reset All"><i class="fa fa-refresh"></i></button>
-                  </div>
+                                        <div class="actions">
+                                            <button class="icon-btn" aria-label="Save All"><i class="fa fa-floppy-disk"></i></button>
+                                            <button class="icon-btn" aria-label="Reset All"><i class="fa fa-refresh"></i></button>
+                                            <div class="dropdown">
+                                                <button class="icon-btn" id="settingsBtn" aria-label="Settings">
+                                                    <i class="fa fa-cog"></i>
+                                                </button>
+                                                <div class="dropdown-menu" id="settingsMenu">
+                                                    <a href="about_verifact.html"><i class="fa fa-info-circle"></i> About VeriFact</a>
+                                                    <a href="guide.html"><i class="fa fa-book"></i> Guide</a>
+                                                    <button type="button" id="openFeedbackModal"><i class="fa fa-comment"></i> Send Feedback</button>
+
+                                                    <div class="divider"></div>
+                                                    <button type="button" id="lightModeBtn"><i class="fa fa-sun"></i> Light Mode</button>
+                                                    <button type="button" id="darkModeBtn"><i class="fa fa-moon"></i> Dark Mode</button>
+                                                    <button type="button" id="displayModeBtn"><i class="fa fa-adjust"></i> Display Mode</button>
+
+                                                    <div class="divider"></div>
+
+                                                    <a href="archive.html"><i class="fa fa-archive"></i>Archive</a>
+                                                    <a href="auth.html" style="color: #e34234;"><i class="fa fa-sign-out" style="color: #e34234;"></i> Sign Out</a>
+
+                                                    <div class="divider"></div>
+                                                    <a href="#"><i class="fa fa-star"></i> Upgrade to Plus</a>
+                                                </div>
+                                            </div>
+                                    </div>
                 </section>
 
             

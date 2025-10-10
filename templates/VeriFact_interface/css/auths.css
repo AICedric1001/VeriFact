@@ -19,52 +19,27 @@ html, body { height: 100%; }
 body {
   margin: 0;
   font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-  background: #11212d;
+  background: #11212d; 
   color: var(--text);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
   position: relative;
   overflow: hidden;
 }
 
-body::before {
-  content: "";
-  position: absolute;
-  bottom: -100%; 
-  left: 50%;
-  transform: translateX(-50%);
+canvas#aurora-bg {
+  position: fixed;
+  inset: 0;
   width: 100%;
-  height: 180%;
-
-  background: linear-gradient(270deg, #ff00a2, #095996, #9900ff, #ff6600);
-  background-size: 600% 600%;
-
+  height: 100%;
   z-index: -1;
   pointer-events: none;
-
-  animation: aurora 20s ease infinite;
-  mask-image: linear-gradient(to top, #000000, #00000000); 
-  -webkit-mask-image: linear-gradient(to top, #000000, #00000000);
-}
-
-@keyframes aurora {
-  0% {
-    background-position: 0% 80%;
-    opacity: 0.7;
-  }
-  50% {
-    background-position: 100% 20%;
-    opacity: 1;
-  }
-  100% {
-    background-position: 0% 80%;
-    opacity: 0.7;
-  }
+  background: #11212d;
+  filter: blur(70px) brightness(0.6); 
+  mix-blend-mode: screen;
+  transform: translateY(50px);
 }
 
 .screen {
-  min-height: 90dvh;
+  min-height: 80dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -74,9 +49,9 @@ body::before {
 }
 
 .brand {
-  font-size: 28px;
+  font-size: 35px;
   font-weight: 800;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
 }
 
 .brand-veri { color: var(--brand-veri); }
@@ -84,20 +59,21 @@ body::before {
 
 .auth-panel {
   width: 92vw;
-  max-width: 390px;
+  max-width: 360px;
   background: var(--panel);
   border: 2px solid var(--panel-border);
   border-radius: 30px;
-  padding: 30px;   
+  padding: 24px;   
 }
 
+/*Button*/
 .btn {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  height: 55px;
+  height: 50px;
   margin: 10px 0;
   padding: 0 16px;
   border-radius: 22px;
@@ -108,12 +84,12 @@ body::before {
 
 }
 
-.btn-google {
+.btn-auth {
   background: #e6ebf0;
   color: #24303a;
   border: 0;
 }
-.btn-google:hover { 
+.btn-auth:hover { 
   background: #d9d9d9; 
 }
 
@@ -158,17 +134,14 @@ body::before {
   background: rgba(0, 0, 0, 0.45);
   padding: 24px;
   z-index: 1000;
-
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.5s ease;
 }
-
 .modal.open {
   opacity: 1;
   pointer-events: auto;
 }
-
 .modal-card {
   width: 100%;
   max-width: 380px;
@@ -177,12 +150,10 @@ body::before {
   border-radius: 14px;
   border: 1px solid var(--panel-border);
   box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-
   transform: scale(0.95) translateY(20px);
   opacity: 0;
   transition: transform 0.35s ease, opacity 0.35s ease;
 }
-
 .modal.open .modal-card {
   transform: scale(1) translateY(0);
   opacity: 1;
@@ -210,6 +181,15 @@ body::before {
   cursor: pointer;
 }
 
+.input {
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--btn-outline);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 0 12px;
+}
+
 .form { 
   padding: 16px; 
   display: grid; 
@@ -222,35 +202,89 @@ body::before {
   font-size: 14px; 
 }
 
-.form-row { display: flex; align-items: center; justify-content: space-between; }
-.form-row.left { justify-content: flex-start; }
-.link { color: #9ec9ff; text-decoration: none; }
-.link:hover { text-decoration: underline; }
-
-.input {
-  height: 40px;
-  border-radius: 10px;
-  border: 1px solid var(--btn-outline);
-  background: rgba(255,255,255,0.06);
-  color: var(--text);
-  padding: 0 12px;
-}
-.remember { 
+.form-row { 
   display: flex; 
   align-items: center; 
-  gap: 8px; 
-  font-size: 14px; }
+  justify-content: space-between; 
+}
 
-.terms { 
-  display: grid; 
-  grid-template-columns: 18px 1fr; 
-  align-items: start; 
-  gap: 10px; 
-  font-size: 14px; 
+.form-row.left { 
+  justify-content: flex-start; 
 }
-.terms input[type="checkbox"] { 
-  width: 18px; 
-  height: 14px; 
-  margin-top: 2px; 
+
+/* Forgot Password Link */
+#forgotPassword {
+  display: inline-block;
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: none;
+  margin-top: 8px;
+  transition: color 0.3s ease, text-decoration 0.3s ease;
 }
-.terms span { line-height: 1.3; }
+#forgotPassword:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.form-row.left #forgotPassword {
+  margin-left: 2px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/*Footer*/
+.footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 30px;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--muted);
+}
+.footer-links .link {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+.footer-links .link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+.footer-links .divider {
+  color: var(--btn-outline);
+}
+
+/*Show password*/
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper .password {
+  width: 100%;
+  padding-right: 40px; /* space for the eye inside input */
+}
+
+.password-wrapper .toggle-password {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 16px;
+  transition: color 0.2s;
+}
+
+.password-wrapper .toggle-password:hover {
+  color: var(--text);
+}
+
+
+
+        
+
+        

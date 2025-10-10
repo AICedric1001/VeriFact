@@ -134,9 +134,6 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
             </div>
             <div class="accordion-content">
               <div class="response-section">
-                <hr>
-                <strong>Title:</strong> <span class="resp-title-text">earthquake</span>
-                <hr>
                 <strong>Summary:</strong>
                 <p class="resp-summary">On September 30 there is a 6.7 magnitude earthquake in Cebu.......</p>
                 <hr>
@@ -453,70 +450,150 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
     });
   })();
 
-// Sidebar toggle functionality: use root class to trigger push behavior
-document.getElementById("sidebarToggle").addEventListener("click", function() {
-  const app = document.querySelector('.app');
-  const overlay = document.getElementById("sidebarOverlay");
-  const sidebar = document.getElementById('sidebar');
-
-  const willOpen = !app.classList.contains('sidebar-open');
-  if (willOpen) {
-    app.classList.add('sidebar-open');
-    // show overlay only on small screens (when sidebar width covers content)
-    if (window.matchMedia('(max-width: 900px)').matches) {
-      overlay.classList.add('show');
-    } else {
-      overlay.classList.remove('show');
-    }
-  } else {
-    app.classList.remove('sidebar-open');
-    overlay.classList.remove('show');
-  }
-});
-
-// Close sidebar when clicking overlay
-document.getElementById("sidebarOverlay").addEventListener("click", function() {
-  // Close the push-sidebar by removing the root flag and hide overlay
-  const app = document.querySelector('.app');
-  if (app) app.classList.remove('sidebar-open');
-  this.classList.remove('show');
-});
-
-// Close sidebar with Escape key
-document.addEventListener("keydown", function(e) {
-  if (e.key === "Escape") {
+  // Sidebar toggle functionality: use root class to trigger push behavior
+  document.getElementById("sidebarToggle").addEventListener("click", function() {
     const app = document.querySelector('.app');
-    const overlay = document.getElementById('sidebarOverlay');
-    if (app.classList.contains('sidebar-open')) {
+    const overlay = document.getElementById("sidebarOverlay");
+    const sidebar = document.getElementById('sidebar');
+    const toggleIcon = this.querySelector('i'); // get icon inside button
+  
+    const willOpen = !app.classList.contains('sidebar-open');
+    if (willOpen) {
+      app.classList.add('sidebar-open');
+      // show overlay only on small screens
+      if (window.matchMedia('(max-width: 900px)').matches) {
+        overlay.classList.add('show');
+      } else {
+        overlay.classList.remove('show');
+      }
+  
+      // change icon to "close"
+      toggleIcon.classList.remove('fa-bars');
+      toggleIcon.classList.add('fa-times');
+  
+    } else {
       app.classList.remove('sidebar-open');
-      if (overlay) overlay.classList.remove('show');
+      overlay.classList.remove('show');
+  
+      // revert icon to "hamburger"
+      toggleIcon.classList.remove('fa-times');
+      toggleIcon.classList.add('fa-bars');
     }
-  }
-});
+  });
+  
+  // Close sidebar when clicking overlay
+  document.getElementById("sidebarOverlay").addEventListener("click", function() {
+    const app = document.querySelector('.app');
+    const toggleIcon = document.getElementById("sidebarToggle").querySelector('i');
+  
+    if (app) app.classList.remove('sidebar-open');
+    this.classList.remove('show');
+  
+    // revert icon to hamburger
+    toggleIcon.classList.remove('fa-times');
+    toggleIcon.classList.add('fa-bars');
+  });
+  
+  // Close sidebar with Escape key
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") {
+      const app = document.querySelector('.app');
+      const overlay = document.getElementById('sidebarOverlay');
+      const toggleIcon = document.getElementById("sidebarToggle").querySelector('i');
+  
+      if (app.classList.contains('sidebar-open')) {
+        app.classList.remove('sidebar-open');
+        if (overlay) overlay.classList.remove('show');
+  
+        // revert icon to hamburger
+        toggleIcon.classList.remove('fa-times');
+        toggleIcon.classList.add('fa-bars');
+      }
+    }
+  });
 
-// Settings dropdown (topbar)
-document.getElementById("settingsBtn").addEventListener("click", function() {
-  document.getElementById("settingsMenu").classList.toggle("show");
-});
-window.addEventListener("click", function(e) {
-  if (!e.target.closest(".dropdown")) {
-    document.getElementById("settingsMenu").classList.remove("show");
-  }
-});
+// Settings dropdown (topbar) — render as fixed popup attached to <body> to avoid clipping
+document.addEventListener('DOMContentLoaded', function() {
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsMenu = document.getElementById('settingsMenu');
+  const dropdownWrapper = settingsBtn ? settingsBtn.closest('.dropdown') : null;
 
-document.querySelectorAll(".dropdown .icon-btn").forEach(btn => {
-  btn.addEventListener("click", (e) => {
-    const parent = btn.closest(".dropdown");
-    parent.classList.toggle("open");
-    document.querySelectorAll(".dropdown").forEach(d => {
-      if (d !== parent) d.classList.remove("open");
-    });
+  if (!settingsBtn || !settingsMenu) return;
+
+  function openSettingsMenu() {
+    // Attach to body so it's not constrained by parents
+    if (settingsMenu.parentElement !== document.body) {
+      document.body.appendChild(settingsMenu);
+    }
+    // Make visible off-screen to measure
+    settingsMenu.style.visibility = 'hidden';
+    settingsMenu.style.display = 'block';
+    settingsMenu.style.position = 'fixed';
+    settingsMenu.style.zIndex = '5000';
+
+    const rect = settingsBtn.getBoundingClientRect();
+    const menuWidth = settingsMenu.offsetWidth;
+    const gap = 6;
+
+    let left = rect.right - menuWidth; // right align under the gear
+    let top = rect.bottom + gap;
+    // Keep within viewport horizontally
+    if (left < 8) left = 8;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = window.innerWidth - menuWidth - 8;
+    }
+    // Keep within viewport vertically
+    const menuHeight = settingsMenu.offsetHeight;
+    if (top + menuHeight > window.innerHeight - 8) {
+      // place above the button if there is not enough space below
+      top = Math.max(8, rect.top - gap - menuHeight);
+    }
+
+    settingsMenu.style.left = left + 'px';
+    settingsMenu.style.top = top + 'px';
+    settingsMenu.style.visibility = 'visible';
+    settingsMenu.dataset.open = 'true';
+    if (dropdownWrapper) dropdownWrapper.classList.add('open');
+  }
+
+  function closeSettingsMenu() {
+    settingsMenu.style.display = 'none';
+    settingsMenu.style.visibility = '';
+    settingsMenu.style.left = '';
+    settingsMenu.style.top = '';
+    settingsMenu.style.position = '';
+    settingsMenu.dataset.open = 'false';
+    if (dropdownWrapper) dropdownWrapper.classList.remove('open');
+  }
+
+  settingsBtn.addEventListener('click', function(e) {
+    e.preventDefault();
     e.stopPropagation();
+    if (settingsMenu.dataset.open === 'true') {
+      closeSettingsMenu();
+    } else {
+      openSettingsMenu();
+    }
+  });
+
+  // Close on outside click / ESC / resize / scroll
+  window.addEventListener('click', function(e) {
+    if (settingsMenu.dataset.open === 'true' && !e.target.closest('#settingsMenu') && e.target !== settingsBtn) {
+      closeSettingsMenu();
+    }
+  });
+  window.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && settingsMenu.dataset.open === 'true') closeSettingsMenu();
+  });
+  window.addEventListener('scroll', function() {
+    if (settingsMenu.dataset.open === 'true') closeSettingsMenu();
+  }, true);
+  window.addEventListener('resize', function() {
+    if (settingsMenu.dataset.open === 'true') closeSettingsMenu();
   });
 });
-document.addEventListener("click", () => {
-  document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("open"));
-});
+
+// Generic dropdown handler removed - settings dropdown has its own specific handler above
 
 
 

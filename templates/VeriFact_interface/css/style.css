@@ -212,20 +212,33 @@ body {
 }
 
 .avatar .fa { 
-  font-size: 16px;
+  font-size: 22px;
 }
 
 .user-name { 
   color: var(--muted); 
   font-weight: 600; 
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.user-name:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(233,238,243,0.04);
 }
 
 .brand {
   position: absolute;
-  left: 50%;
+  right: 90%;
   transform: translateX(-50%);
   text-align: center;
-  font-weight: 800;
+  font-size: 22px;
+  font-weight: 900;
   margin-top: -1px;
 }
 
@@ -242,10 +255,15 @@ body {
   display: inline-flex; 
   align-items: center; 
   justify-content: center;
+  border-radius: 16px;
 }
 
 .icon-btn .fa { 
   font-size: 20px; 
+}
+
+.icon-btn:hover {
+  background: #71797c68;
 }
 
 /* =========================
@@ -254,7 +272,7 @@ body {
 .sidebar {
   /* Switch to transform-based off-canvas that doesn't rely on absolute left so it can push content */
   position: fixed;
-  top: 8vh; /* below topbar */
+  top: 7vh; /* below topbar */
   left: 0; /* anchor to left edge */
   width: 320px; /* slightly narrower for better fit */
   max-width: 80%;
@@ -268,6 +286,18 @@ body {
   flex-direction: column;
   overflow: auto;
   will-change: transform;
+  overflow-y: auto;
+  scrollbar-width: thin; 
+  scrollbar-color: #6c757d transparent;
+
+}
+
+#sidebarToggle i {
+  transition: transform 0.8s ease;
+}
+
+.app.sidebar-open #sidebarToggle i {
+  transform: rotate(90deg); /* optional rotation effect */
 }
 
 /* When the app root has .sidebar-open, slide the sidebar in by resetting transform */
@@ -292,6 +322,7 @@ body {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
+
 
 .sidebar-header .title {
   display: flex;
@@ -376,6 +407,9 @@ body {
   border-bottom: 2px solid var(--border);
   width: 100%;
   margin-bottom: 10px;
+  position: relative;
+  z-index: 100; /* ensure section header and its dropdowns are above chat content */
+  overflow: visible; /* allow dropdown to extend beyond section header */
 }
 
 .section-header .title {
@@ -396,6 +430,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px; /* spacing between search, trash, checkbox */
+  position: relative; /* ensure dropdown positions relative to actions container */
 }
 
 
@@ -428,21 +463,17 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   max-height: calc(100vh - 8vh - 48px); /* 8vh for topbar, 48px for tabs */
-  overflow-y: auto;
+  overflow: visible; /* allow dropdowns to extend beyond content area */
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-
-
-
 
 .accordion {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
 }
-
 
 .card {
   display: grid; 
@@ -676,7 +707,8 @@ transform: translate(-50%, -58%);
   
   .sidebar {
     width: 300px;
-    left: -300px;
+    /* Do not offset with left; rely on transform-based off-canvas */
+    left: 0;
   }
 }
 
@@ -689,7 +721,8 @@ transform: translate(-50%, -58%);
   
   .sidebar {
     width: 280px;
-    left: -280px;
+    /* Do not offset with left; rely on transform-based off-canvas */
+    left: 0;
   }
   
   .sidebar-header {
@@ -712,7 +745,14 @@ transform: translate(-50%, -58%);
   
   .sidebar {
     width: 100%;
-    left: -100%;
+    /* Do not offset with left; rely on transform off-canvas only */
+    left: 0;
+  }
+
+  /* Ensure open state fully brings the sidebar into view on tiny screens */
+  .app.sidebar-open .sidebar {
+    left: 0;
+    transform: translateX(0%);
   }
 }
 
@@ -720,22 +760,23 @@ transform: translate(-50%, -58%);
 .dropdown {
   position: relative;
   display: inline-block;
+  z-index: 100; /* ensure dropdown container is above other elements */
 }
 
 /* Dropdown menu */
 .dropdown-menu {
   position: absolute;
-  top: 110%;
+  top: calc(100% + 6px); /* slight gap below the button */
   right: 0;
   background: #1b2b38;
   border-radius: 8px;
   min-width: 200px;
   width: 220px;
+  padding: 6px 0; /* breathing room for items */
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
   display: none;
-  flex-direction: column;
-  overflow: hidden;
-  z-index: 1000;
+  z-index: 5000; /* ensure it overlays fixed chat container and other layers */
 }
 
 /* Dropdown menu links */
@@ -744,10 +785,12 @@ transform: translate(-50%, -58%);
   text-decoration: none;
   color: var(--text);
   font-size: 14px;
-  display: flex;
+  display: block;
   align-items: center;
   gap: 10px;
   transition: background 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .dropdown-menu a:hover {
@@ -755,7 +798,7 @@ transform: translate(-50%, -58%);
 }
 
 .dropdown-menu.show {
-  display: flex;
+  display: block;
 }
 
 /* Divider */
@@ -763,6 +806,7 @@ transform: translate(-50%, -58%);
   height: 1px;
   background: rgba(255,255,255,0.2);
   margin: 6px 0;
+  flex-shrink: 0;
 }
 
 .dropdown-menu button {
@@ -771,12 +815,24 @@ transform: translate(-50%, -58%);
   text-align: left;
   padding: 10px 14px;
   font-size: 14px;
-  color: rgba(255,255,255,0.95);
+  color: var(--text);
   cursor: pointer;
-  display: flex;
+  display: block;
   align-items: center;
   gap: 8px;
   width: 100%;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Ensure all direct children render as rows and inherit text color */
+.dropdown-menu > * {
+  display: block;
+  color: var(--text);
+}
+
+.dropdown-menu i {
+  margin-right: 10px;
 }
 
 .dropdown-menu button:hover {
@@ -784,29 +840,36 @@ transform: translate(-50%, -58%);
 }
 
 .dropdown.open .dropdown-menu {
-  display: flex;
+  display: block !important; /* render as normal block menu */
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
 }
 
 #floatingDropdown {
-    width: 140px;
+    width: 120px;
     min-width: 0;
-    margin-top: 4px;
+    margin-top: 4px;        
+    flex-direction: column;  
+    gap: 1px;               
 }
+
 
 /* Chat container */
 .chat-container {
-  width: 100%;                
-  max-width: 100%;            
-  padding: 10px 20px 10px 10px;
+  width: 60%;                
+  max-width: 60%;
+  margin: 0 auto;            
+  padding: 10px 20px 120px 10px;
 
   position: fixed;
-  top: 105px;
+  top: 100px;
   left: 0;                  
   right: 0;                  
   
   display: flex;
   flex-direction: column;
-  height: calc(78vh - 100px); 
+  height: calc(80vh - 100px); 
   gap: 12px;
 
   overflow-y: auto;
@@ -814,6 +877,15 @@ transform: translate(-50%, -58%);
 
   scrollbar-width: thin; 
   scrollbar-color: #6c757d transparent;
+
+ /* fade effect at top and bottom */
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 5%, rgba(0,0,0,1) 90%, rgba(0,0,0,0) 100%);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 5%, rgba(0,0,0,1) 90%, rgba(0,0,0,0) 100%);
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+  transition: all 0.28s ease; 
 }
 
 /* center the messages inside */
@@ -852,10 +924,10 @@ transform: translate(-50%, -58%);
   color: #ffffff;
   padding: 10px 14px;
   border-radius: 18px 18px 18px 4px;
-  width: fit-content;   
-  max-width: 90%;       
-  margin: 10px auto;    
-  text-align: center;   
+  width: 100%;
+  max-width: 80%;
+  margin: 10px auto;
+  text-align: left;
 }
 
 
@@ -872,10 +944,6 @@ transform: translate(-50%, -58%);
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-}
-
-.bot-message .accordion-header strong {
-  font-size: 14px;
 }
 
 .bot-message .accordion-toggle {
@@ -902,8 +970,6 @@ transform: translate(-50%, -58%);
 }
 
 .bot-message .accordion-item.open .accordion-content {
-  /* Allow bot messages to expand nearly full viewport height so long
-     responses are visible without an internal scrollbar. */
   max-height: calc(100vh - 140px);
   padding: 12px;
   overflow: visible;
@@ -920,6 +986,7 @@ transform: translate(-50%, -58%);
 .bot-message .url-row i.fa-check-circle {
   color: #4caf50;
 }
+
 
 
 /*CHAT INPUT*/ 
@@ -952,13 +1019,13 @@ transform: translate(-50%, -58%);
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  transition: left 0.28s ease, bottom 0.8s cubic-bezier(0.4,0,0.2,1);
+  transition: all 0.28s ease, bottom 0.8s cubic-bezier(0.4,0,0.2,1);
 }
 
 /* When sidebar is open on desktop, move the chat input horizontally to match content center */
 .app.sidebar-open .chat-input.bottom {
   left: calc(50% + 160px); /* move half the sidebar width to remain centered relative to shifted content */
-  transition: left 0.28s ease;
+  transition: all 0.28s ease, bottom 0.8s cubic-bezier(0.4,0,0.2,1);
 }
 
 /* Initially center (vertical middle) */
@@ -1123,11 +1190,10 @@ transform: translate(-50%, -58%);
 
 /* Card Container */
 .accuracy-card {
-  background: #2d3e4f; /* white card */
   padding: 10px;
   border-radius: 30px;
-    border: 1px solid var(--border);
-    margin-top: 2em;
+  border: 1px solid var(--border);
+  margin-top: 2em;
   max-width: 600px;
   margin: 10px auto 20px;
 
