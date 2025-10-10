@@ -3,6 +3,8 @@
     var signupModal = document.getElementById('signupModal');
     var openLogin = document.getElementById('openLogin');
     var openSignup = document.getElementById('openSignup');
+    var loginForm = loginModal ? loginModal.querySelector('form') : null;
+    var signupForm = signupModal ? signupModal.querySelector('form') : null;
 
     function open(modal) {
         if (!modal) return;
@@ -41,10 +43,53 @@
     });
 
     [loginModal, signupModal].forEach(function(m){
-        if (!m) return;
-        m.addEventListener('click', function(e){ if (e.target === m) close(m); });
-    });
-})();
+            if (!m) return;
+            m.addEventListener('click', function(e){ if (e.target === m) close(m); });
+        });
+
+        function toJSON(form) {
+            var data = new FormData(form);
+            var obj = {};
+            data.forEach(function(value, key){ obj[key] = value; });
+            return obj;
+        }
+
+        function handleSubmit(form, url, isSignup = false) {
+            form.addEventListener('submit', function(e){
+                e.preventDefault();
+                var body = toJSON(form);
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                    credentials: 'same-origin'
+                }).then(function(res){
+                    return res.json().then(function(json){ return { ok: res.ok, json: json }; });
+                }).then(function(result){
+                    if (!result.ok) { throw new Error(result.json && result.json.message || 'Request failed'); }
+                    // Close modal
+                    close(form.closest('.modal'));
+                    
+                    if (isSignup) {
+                        // For signup, show success message and don't redirect
+                        alert('Account created successfully! Please sign in with your credentials.');
+                        // Optionally open login modal
+                        if (loginModal) open(loginModal);
+                    } else {
+                        // For login, redirect to home interface
+                        window.location.href = '/home';
+                    }
+                }).catch(function(err){
+                    alert(err.message || 'Something went wrong');
+                });
+            });
+        }
+
+        if (loginForm) handleSubmit(loginForm, '/api/login', false);
+        if (signupForm) handleSubmit(signupForm, '/api/signup', true);
+    })();
+
+
 
 // Toggle password functionality
 document.querySelectorAll('.toggle-password').forEach(icon => {
