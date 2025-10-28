@@ -56,6 +56,9 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
             input.value = "";
             input.style.height = "auto";
 
+            // Get trusted sources checkbox value
+            const trustedSourcesChecked = document.getElementById('trustedSources').checked;
+
             // Send message to backend
             fetch('/api/chat/send', {
               method: 'POST',
@@ -63,7 +66,10 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
                 'Content-Type': 'application/json',
               },
               credentials: 'same-origin',
-              body: JSON.stringify({ message: message })
+              body: JSON.stringify({ 
+                message: message,
+                use_trusted_sources: trustedSourcesChecked
+              })
             })
             .then(response => response.json())
             .then(data => {
@@ -81,7 +87,10 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'same-origin',
-                    body: JSON.stringify({})
+                    body: JSON.stringify({ 
+                      query: message,
+                      use_trusted_sources: trustedSourcesChecked
+                    })
                   })
                   .then(res => res.json())
                   .then(scrape => {

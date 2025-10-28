@@ -122,6 +122,32 @@
                     </div>
                 </div>
 
+                <!-- Search Results -->
+                {% if results %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">🔍 Search Results</h5>
+                    </div>
+                    <div class="card-body">
+                        {% for result in results %}
+                        <div class="mb-3 p-3 border rounded">
+                            <h6 class="card-title">
+                                <a href="{{ result.url }}" target="_blank" class="text-decoration-none">
+                                    {{ result.title or result.url }}
+                                </a>
+                            </h6>
+                            <p class="card-text small text-muted">{{ result.url }}</p>
+                            {% if result.content %}
+                            <div class="card-text">
+                                <small>{{ result.content[:300] }}{% if result.content|length > 300 %}...{% endif %}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Posts Feed -->
                 <div id="posts-container">
                     {% for post in posts %}

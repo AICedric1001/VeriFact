@@ -134,8 +134,9 @@ def index():
         # Handle search functionality
         if 'query' in request.form:
             query = request.form['query']
-            serpapi_key = request.form.get('serpapi_key') or os.getenv("SERPAPI_API_KEY")
-            results = main_system(query, serpapi_key)
+            serpapi_key = request.form.get('serpapi_key') or os.getenv("SERPAPI_API_KEY") or "b78924b4496d3e2abba8b33f9e89fa5eb443f8e5ba0db605c98b5b6bae37e50c"
+            use_trusted_sources = 'use_trusted_sources' in request.form
+            results = main_system(query, serpapi_key, use_trusted_sources)
 
             try:
                 with get_db_connection() as db:
@@ -260,8 +261,9 @@ def api_scrape():
             except Exception:
                 return jsonify({'status': 'error', 'message': 'query is required'}), 400
 
-        serpapi_key = data.get('serpapi_key') or os.getenv("SERPAPI_API_KEY")
-        results = main_system(query, serpapi_key)
+        serpapi_key = data.get('serpapi_key') or os.getenv("SERPAPI_API_KEY") or "b78924b4496d3e2abba8b33f9e89fa5eb443f8e5ba0db605c98b5b6bae37e50c"
+        use_trusted_sources = data.get('use_trusted_sources', False)
+        results = main_system(query, serpapi_key, use_trusted_sources)
 
         with get_db_connection() as db:
             with db.cursor() as cursor:
