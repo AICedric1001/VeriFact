@@ -7,17 +7,21 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <meta name="color-scheme" content="dark light">
     <link rel="stylesheet" href="css/auths.css">
 </head>
 <body>
+    <canvas id="aurora-bg"></canvas>
+
     <div class="screen">
         <header class="brand" aria-label="VeriFact">
             <span class="brand-veri">Veri</span><span class="brand-fact">Fact</span>
         </header>
 
         <main class="auth-panel" role="main">
-            <button class="btn btn-google" type="button">
+            <button class="btn btn-auth" type="button">
                 <span class="google-icon" aria-hidden="true">
                     <svg width="18" height="18" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
                         <path fill="#EA4335" d="M24 9.5c3.64 0 6.9 1.26 9.48 3.72l7.1-7.1C36.86 1.9 30.9 0 24 0 14.62 0 6.44 5.38 2.56 13.2l8.82 6.84C13.52 14.18 18.34 9.5 24 9.5z"/>
@@ -32,7 +36,12 @@
             <button class="btn btn-hollow" id="openSignup" type="button">Sign up</button>
         </main>
 
-        <footer class="tagline">Let's Confirm</footer>
+        <footer class="footer-links">
+            <a href="#" class="link">Terms and Conditions</a>
+            <span class="divider">|</span>
+            <a href="#" class="link">Data Privacy</a>
+        </footer>
+
     </div>
 
     <!-- Login Modal -->
@@ -42,23 +51,24 @@
                 <h3 class="modal-title" id="loginTitle">Log in</h3>
                 <button class="modal-close" type="button" aria-label="Close" data-close>×</button>
             </div>
-            <form class="form" autocomplete="on">
+            <form class="form" autocomplete="off">
                 <label>
                     <span>Username</span>
-                    <input class="input" type="text" name="username" placeholder="Enter username" required>
+                    <input class="input" type="text" name="username" placeholder="Enter username" autocomplete="new-username" required>
                 </label>
+
                 <label>
                     <span>Password</span>
-                    <input class="input" type="password" name="password" placeholder="Enter password" required>
-                </label>
-                <label class="terms">
-                    <input type="checkbox" name="agree_terms" required>
-                    <span>I agree to the <a href="#" class="link">Terms and Conditions</a></span>
-                </label>
+                    <div class="password-wrapper">
+                        <input class="input password" type="password" name="password" placeholder="Enter password" autocomplete="new-password" required>
+                        <i class="fa-solid fa-eye-slash toggle-password"></i>
+                    </div>
+                    </label>
+
                 <div class="form-row left">
                     <a href="#" class="link" id="forgotPassword">Forget password</a>
                 </div>
-                <button class="btn btn-google" type="submit">Login</button>
+                <button class="btn btn-auth" type="submit">Login</button>
             </form>
         </div>
     </div>
@@ -70,16 +80,21 @@
                 <h3 class="modal-title" id="signupTitle">Sign up</h3>
                 <button class="modal-close" type="button" aria-label="Close" data-close>×</button>
             </div>
-            <form class="form" autocomplete="on">
+            <form class="form" autocomplete="off">
                 <label>
                     <span>Username</span>
-                    <input class="input" type="text" name="new_username" placeholder="Choose a username" required>
+                    <input class="input" type="text" name="new_username" placeholder="Choose a username" autocomplete="new-username" required>
                 </label>
+                
                 <label>
                     <span>Password</span>
-                    <input class="input" type="password" name="new_password" placeholder="Create a password" required>
-                </label>
-                <button class="btn btn-google" type="submit">Create account</button>
+                    <div class="password-wrapper">
+                        <input class="input password" type="password" name="new_password" placeholder="Create a password" autocomplete="new-password" required>
+                        <i class="fa-solid fa-eye-slash toggle-password"></i>
+                    </div>
+                    </label>
+
+                <button class="btn btn-auth" type="submit">Create account</button>
             </form>
         </div>
     </div>
