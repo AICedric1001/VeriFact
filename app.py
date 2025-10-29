@@ -82,7 +82,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="lenroy3221",  #Change this to your own password
+        password="Corl4453",  #Change this to your own password
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -320,6 +320,31 @@ def api_scrape():
                             cursor.execute(insert_category_sql, (search_id, category, 'SEARCH_KEYWORD'))
                 
                 # Note: We only store categories extracted from search query text, not from scraped content
+
+                # Generate AI summary and store in usersummaries so /api/get-bot-response can retrieve it
+                if 'user_db_id' in session:
+                    try:
+                        print("🤖 Generating AI summary (API scrape)...")
+                        summary_data = generate_summary_from_text(query, serpapi_key)
+                        summary_text = summary_data.get('summary', 'No summary available')
+                        insert_summary_sql = (
+                            """
+                            INSERT INTO usersummaries (user_id, result_id, summary_text)
+                            VALUES (%s, %s, %s)
+                            """
+                        )
+                        cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, summary_text))
+                        print("✅ AI summary stored successfully (API scrape)")
+                    except Exception as summary_error:
+                        print(f"❌ AI Summary Error (API scrape): {summary_error}")
+                        fallback_summary = f"Summary generation failed for query: {query}"
+                        insert_summary_sql = (
+                            """
+                            INSERT INTO usersummaries (user_id, result_id, summary_text)
+                            VALUES (%s, %s, %s)
+                            """
+                        )
+                        cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, fallback_summary))
 
                 db.commit()
 
@@ -659,7 +684,6 @@ def send_chat_message():
     except Exception as e:
         print("❌ Send chat message error:", e)
         return jsonify({'status': 'error', 'message': 'Failed to save message'}), 500
-
 @app.route('/api/chat/history', methods=['GET'])
 def get_chat_history():
     """Get chat history for the current user"""
@@ -768,6 +792,91 @@ def clear_chat_history():
     except Exception as e:
         print("❌ Clear chat history error:", e)
         return jsonify({'status': 'error', 'message': 'Failed to clear chat history'}), 500
+    
+@app.route('/api/get-bot-response/<int:result_id>', methods=['GET'])
+def get_bot_response(result_id):
+    """
+    Retrieve AI summary and scraped articles for a given result_id.
+    This is called by the chat interface to display the bot's response.
+    """
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Get AI summary and search results
+                cursor.execute("""
+                    SELECT 
+                        us.summary_text, 
+                        sr.query, 
+                        sr.results
+                    FROM usersummaries us
+                    JOIN search_results sr ON us.result_id = sr.result_id
+                    WHERE us.result_id = %s AND us.user_id = %s
+                """, (result_id, session['user_db_id']))
+                
+                data = cursor.fetchone()
+                
+                if not data:
+                    return jsonify({'status': 'error', 'message': 'Response not found'}), 404
+                
+                # Parse results JSON (contains all 5 scraped articles)
+                import json
+                results = json.loads(data['results']) if isinstance(data['results'], str) else data['results']
+                
+                # Extract top 5 sources with URLs and titles
+                sources = []
+                for result in results[:5]:
+                    url = result.get('url', '#')
+                    # Check if source is trusted
+                    is_trusted = any(domain in url for domain in [
+                        'rappler.com', 'inquirer.net', 'verafiles.org', 
+                        'philstar.com', 'abs-cbn.com', 'tsek.ph', 'wikipedia.org'
+                    ])
+                    
+                    sources.append({
+                        'title': result.get('title') or url.split('/')[2] if url != '#' else 'Unknown Source',
+                        'url': url,
+                        'is_trusted': is_trusted
+                    })
+                
+                # Calculate accuracy based on trusted sources
+                trusted_count = sum(1 for s in sources if s['is_trusted'])
+                total_count = len(sources)
+                
+                if total_count == 0:
+                    accuracy_percent = 0
+                else:
+                    accuracy_percent = int((trusted_count / total_count) * 100)
+                
+                # Adjust accuracy based on summary warnings
+                summary_lower = data['summary_text'].lower()
+                if '⚠️' in data['summary_text'] or 'unverified' in summary_lower:
+                    accuracy_percent = max(30, accuracy_percent - 20)
+                elif '❌' in data['summary_text'] or 'no results' in summary_lower:
+                    accuracy_percent = 0
+                elif 'could not extract' in summary_lower:
+                    accuracy_percent = max(20, accuracy_percent - 30)
+                
+                return jsonify({
+                    'status': 'success',
+                    'query': data['query'],
+                    'summary': data['summary_text'],
+                    'sources': sources,
+                    'accuracy': {
+                        'true_percent': accuracy_percent,
+                        'false_percent': 100 - accuracy_percent
+                    },
+                    'trusted_count': trusted_count,
+                    'total_count': total_count
+                })
+                
+    except Exception as e:
+        print("❌ Get bot response error:", e)
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 if __name__ == '__main__':

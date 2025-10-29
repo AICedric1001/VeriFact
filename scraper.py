@@ -1,6 +1,8 @@
 from serpapi.google_search import GoogleSearch
 from googlesearch import search
+import newspaper
 from newspaper import Article
+from newspaper import Config
 import spacy
 import os
 import time
@@ -95,17 +97,18 @@ def search_serpapi(query, api_key=None, site_filter=None):
         traceback.print_exc()
         return []
 
+# Configure newspaper3k with a modern User-Agent and sane defaults
+news_config = Config()
+news_config.browser_user_agent = (
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+    '(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+)
+news_config.request_timeout = 10
 # --- Function to scrape and extract article text ---
 def extract_article_text(url):
     try:
         print(f"  ⏳ Downloading: {url}")
-        article = Article(url)
-        
-        # Set user agent to avoid blocking
-        article.set_headers({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
-        
+        article = Article(url, config=news_config)
         article.download()
         article.parse()
         text = (article.text or '').strip()

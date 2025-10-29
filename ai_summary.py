@@ -6,18 +6,30 @@ def generate_summary_from_text(post_text, serpapi_key=None):
     print(f"📨 Running summary on: {post_text}")
 
     links = search_serpapi(post_text, serpapi_key)
+    # Normalize to a list of URL strings in case search_serpapi returns dicts
+    urls = []
+    for item in links or []:
+        if isinstance(item, dict):
+            url = item.get('url')
+            if url:
+                urls.append(url)
+        elif isinstance(item, str):
+            urls.append(item)
 
-    trusted_links = [url for url in links if any(domain in url for domain in FILTERED_DOMAINS)]
-    unverified_links = [url for url in links if url not in trusted_links]
+    trusted_links = [url for url in urls if any(domain in url for domain in FILTERED_DOMAINS)]
+    unverified_links = [url for url in urls if url not in trusted_links]
 
     # Limit to top 5
     trusted_links = trusted_links[:5]
     unverified_links = unverified_links[:5]
 
-    def build_combined_text(links):
+    def build_combined_text(url_list):
         combined = ""
-        for link in links:
-            article = extract_article_text(link)
+        for link in url_list:
+            try:
+                article = extract_article_text(link)
+            except Exception:
+                article = None
             if article:
                 combined += f"\n\n[Source: {link}]\n{article}"
         return combined.strip()
