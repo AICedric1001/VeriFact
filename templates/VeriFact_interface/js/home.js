@@ -37,67 +37,68 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
     const input = document.getElementById("userInput");
     const chatBox = document.getElementById("chatBox");
     const chatInput = document.getElementById("chatInput");
-
+  
     if (input.value.trim() === "") return;
-
+  
     const message = input.value.trim();
     
-    // Move chat input to bottom if centered
+    // Move chat input to bottom
     chatInput.classList.remove("centered");
     chatInput.classList.add("bottom");
-
-    // User bubble
+  
+    // Display user message
     const userMsg = document.createElement("div");
     userMsg.className = "user-message";
     userMsg.innerText = message;
     chatBox.appendChild(userMsg);
-
-    // Clear input immediately
+  
+    // Clear input
     input.value = "";
     input.style.height = "auto";
-
-    // Send message to backend
+  
+    // Send to backend
     fetch('/api/chat/send', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({ message: message })
     })
     .then(response => response.json())
     .then(data => {
       if (data.status === 'success') {
-        // Generate bot responses (simulate AI processing)
         if (data.is_first_message) {
-          // First message - trigger scraping using latest searches entry (no query in body)
+          // First message - trigger scraping
           const loadingMsg = document.createElement('div');
           loadingMsg.className = 'bot-message';
-          loadingMsg.textContent = 'Processing sources…';
+          loadingMsg.textContent = 'Searching and scraping sources…';
           chatBox.appendChild(loadingMsg);
           chatBox.scrollTop = chatBox.scrollHeight;
-
+  
           fetch('/api/scrape', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({})
+            body: JSON.stringify({})  // Query is pulled from latest search
           })
           .then(res => res.json())
           .then(scrape => {
-            if (loadingMsg && loadingMsg.parentNode) loadingMsg.parentNode.removeChild(loadingMsg);
+            if (loadingMsg && loadingMsg.parentNode) {
+              loadingMsg.parentNode.removeChild(loadingMsg);
+            }
             if (scrape && scrape.status === 'success') {
-              // Render with the new result_id
+              // Generate bot response with the result_id
               generateBotResponses(scrape.result_id, chatBox, true);
             } else {
-              console.error('Scrape failed:', scrape && scrape.message);
+              console.error('Scrape failed:', scrape);
               showNotification('Failed to scrape sources. Please try again.', 'error');
             }
           })
           .catch(err => {
-            if (loadingMsg && loadingMsg.parentNode) loadingMsg.parentNode.removeChild(loadingMsg);
+            if (loadingMsg && loadingMsg.parentNode) {
+              loadingMsg.parentNode.removeChild(loadingMsg);
+            }
             console.error('Error triggering scrape:', err);
-            showNotification('Error triggering scrape. Please try again.', 'error');
+            showNotification('Error scraping sources. Please try again.', 'error');
           });
         } else {
           // Follow-up message - use chat_id
@@ -1542,3 +1543,164 @@ const textarea = document.querySelector('.chat-input textarea');
       }
     }
   });
+
+  // Generate bot responses by fetching real data from backend
+  function generateBotResponses(id, chatBox, isFirstMessage) {
+    // Show loading indicator
+    const loadingMsg = document.createElement('div');
+    loadingMsg.className = 'bot-message';
+    loadingMsg.innerHTML = `
+      <div style="text-align:center; padding:30px;">
+        <i class="fa fa-spinner fa-spin" style="font-size:32px; color:#f9c229;"></i>
+        <p style="margin-top:15px; color:#a0adb3;">Analyzing sources and generating summary...</p>
+      </div>
+    `;
+    chatBox.appendChild(loadingMsg);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  
+    // Fetch real bot response from backend
+    fetch(`/api/get-bot-response/${id}`, {
+      method: 'GET',
+      credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(data => {
+      // Remove loading message
+      if (loadingMsg && loadingMsg.parentNode) {
+        loadingMsg.parentNode.removeChild(loadingMsg);
+      }
+  
+      if (data.status === 'success') {
+        const botMsg = document.createElement("div");
+        botMsg.className = "bot-message";
+        
+        // Build sources HTML with trust indicators
+        const sourcesHTML = data.sources.map((source, idx) => {
+          const icon = source.is_trusted 
+            ? '<i class="fa fa-check-circle" style="color:#4caf50;" title="Trusted Source"></i>' 
+            : '<i class="fa fa-exclamation-triangle" style="color:#e53935;" title="Unverified Source"></i>';
+          return `<li>${icon} <a href="${source.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`;
+        }).join('');
+  
+        botMsg.innerHTML = `
+          <div class="accordion-item">
+            <div class="accordion-header">
+              <div class="url-row">
+                <strong>Response</strong>
+                <span class="response-title">${escapeHtml(data.query)}</span>
+              </div>
+              <div class="card-right">
+                <button class="icon-btn save-response-btn" type="button" title="Save response">
+                  <i class="fa fa-save"></i>
+                </button>
+              </div>
+              <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+            </div>
+            <div class="accordion-content">
+              <div class="response-section">
+                <strong>Summary:</strong>
+                <p class="resp-summary">${escapeHtml(data.summary)}</p>
+                <hr>
+                <strong>Top ${data.total_count} Sources:</strong>
+                <ol class="resp-sources">${sourcesHTML}</ol>
+                <hr>
+                <strong>Analysis</strong>
+                <p class="resp-analysis">According to the analysis, this information is <strong>${data.accuracy.true_percent}% credible</strong> based on source reliability.</p>
+  
+                <!-- Accuracy Card -->
+                <div class="accuracy-card response-accuracy-card">
+                  <div class="accuracy-bar">
+                    <span class="true-label">
+                      <i class="fa fa-check-circle"></i> 
+                      <span class="true-percent">${data.accuracy.true_percent}</span>%
+                    </span>
+                    <div class="bar range-bar">
+                      <div class="true" style="width: ${data.accuracy.true_percent}%"></div>
+                      <div class="false" style="width: ${data.accuracy.false_percent}%"></div>
+                    </div>
+                    <span class="false-label">
+                      <span class="false-percent">${data.accuracy.false_percent}</span>% 
+                      <i class="fa fa-exclamation-triangle"></i>
+                    </span>
+                  </div>
+                </div>
+  
+                <hr>
+                <strong>Key Findings:</strong>
+                <ul class="resp-keyfindings">
+                  <li>${data.trusted_count} out of ${data.total_count} sources are from verified outlets</li>
+                  <li>${data.total_count - data.trusted_count} unverified source${data.total_count - data.trusted_count !== 1 ? 's' : ''}</li>
+                  ${data.accuracy.true_percent >= 80 ? '<li style="color:#4caf50;">High confidence in information accuracy</li>' : ''}
+                  ${data.accuracy.true_percent < 50 ? '<li style="color:#e53935;">⚠️ Exercise caution - limited verified sources</li>' : ''}
+                </ul>
+              </div>
+            </div>
+          </div>
+        `;
+      
+        chatBox.appendChild(botMsg);
+        chatBox.scrollTop = chatBox.scrollHeight;
+  
+        // Wire up accordion toggle
+        const toggleBtn = botMsg.querySelector(".accordion-toggle");
+        const accordionItem = botMsg.querySelector(".accordion-item");
+        toggleBtn.addEventListener("click", () => {
+          if (accordionItem.classList.contains('open')) {
+            closeAccordion(accordionItem);
+            toggleBtn.setAttribute('aria-expanded', 'false');
+          } else {
+            openAccordion(accordionItem);
+            toggleBtn.setAttribute('aria-expanded', 'true');
+          }
+        });
+  
+        // Wire save button
+        const saveBtn = botMsg.querySelector('.save-response-btn');
+        if (saveBtn) {
+          saveBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            saveResponseToSidebar(botMsg);
+            saveBtn.classList.add('saved');
+            saveBtn.title = 'Saved';
+            showNotification('Saved response to History', 'success');
+          });
+        }
+  
+        // Update chat response in database (for follow-up messages)
+        if (!isFirstMessage) {
+          const responseText = `${data.summary}\n\nSources: ${data.sources.map(s => s.url).join(', ')}`;
+          updateChatResponse(id, responseText);
+        }
+        
+      } else {
+        showNotification('Failed to generate response: ' + (data.message || 'Unknown error'), 'error');
+        console.error('Backend error:', data);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching bot response:', error);
+      if (loadingMsg && loadingMsg.parentNode) {
+        loadingMsg.parentNode.removeChild(loadingMsg);
+      }
+      
+      // Show error message in chat
+      const errorMsg = document.createElement('div');
+      errorMsg.className = 'bot-message';
+      errorMsg.innerHTML = `
+        <div style="padding:20px; color:#e53935; text-align:center;">
+          <i class="fa fa-exclamation-circle" style="font-size:24px;"></i>
+          <p>Failed to generate response. Please try again.</p>
+        </div>
+      `;
+      chatBox.appendChild(errorMsg);
+      showNotification('Error generating response. Please try again.', 'error');
+    });
+  }
+  
+  // Helper function to escape HTML and prevent XSS
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
