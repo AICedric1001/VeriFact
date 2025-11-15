@@ -13,6 +13,7 @@
   --tab-bg: #a0adb3;
   --tab-active: #ffffff;
   --border: #ffffff38;
+  --sidebar-width: 320px; /* used to shift fixed chat input when sidebar opens */
 }
 
 /* =========================
@@ -281,7 +282,7 @@ body {
   border-right: 1px solid var(--border);
   transform: translateX(-100%); /* hidden by default off-canvas */
   transition: transform 0.28s ease, box-shadow 0.28s ease;
-  z-index: 1000;
+  z-index: 1195;
   display: flex;
   flex-direction: column;
   overflow: auto;
@@ -360,7 +361,7 @@ body {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 999;
+  z-index: 1190;
   display: none;
 }
 
@@ -370,8 +371,9 @@ body {
 
 /* When sidebar is open on larger screens, push the main content to the right instead of overlapping */
 .app.sidebar-open .content {
-  transition: margin-left 0.28s ease, width 0.28s ease;
-  margin-left: 320px; /* same as sidebar width */
+  /* Overlay mode: do not push content when sidebar opens */
+  transition: none;
+  margin-left: 0;
 }
 
 /* Keep topbar and toggle accessible: give topbar higher z-index and ensure toggle sits above sidebar */
@@ -389,6 +391,9 @@ body {
   .app.sidebar-open .content { margin-left: 0; }
   .sidebar { width: 80%; }
   .app.sidebar-open .sidebar { transform: translateX(0%); }
+  /* On mobile, keep chat input centered on viewport, not shifted */
+  .app.sidebar-open .chat-input.bottom { left: 50%; transform: translateX(-50%); }
+  .app.sidebar-open .chat-input.centered { left: 50%; transform: translate(-50%, -50%); }
   /* Allow overlay to be shown when JS toggles the .show class */
   .sidebar-overlay.show { display: block; }
 }
@@ -849,58 +854,245 @@ transform: translate(-50%, -58%);
 #floatingDropdown {
     width: 120px;
     min-width: 0;
-    margin-top: 4px;        
+    margin-top: 4px;
     flex-direction: column;  
-    gap: 1px;               
+    gap: 1px;                
 }
 
 
-/* Chat container */
-.chat-container {
-  width: 60%;                
-  max-width: 60%;
-  margin: 0 auto;            
-  padding: 10px 20px 120px 10px;
+/* =========================
+   Chat Layout: 3-Column Grid
+========================= */
+.page-layout {
+  display: grid;
+  grid-template-columns: 1fr 2.1fr 1fr;
+  gap: 20px;
+  padding: 16px;
+  min-height: calc(85vh - 60px);
+  background: var(--bg);
+  color: var(--text);
+  align-content: start;
+}
 
-  position: fixed;
-  top: 100px;
-  left: 0;                  
-  right: 0;                  
-  
+.page-container {
   display: flex;
   flex-direction: column;
-  height: calc(80vh - 100px); 
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
+  height: auto;
+  overflow: hidden;
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0 4px 40px;
+  gap: 16px;
+  position: relative;
+  min-height: calc(85vh - 100px);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.sources-list,
+.trending-list {
+  list-style: none;
+  padding: 12px 16px 16px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.sources-list li,
+.trending-list li {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+  transition: background 0.2s ease;
+  word-break: break-word;
+}
+
+.sources-list li:hover,
+.trending-list li:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+.sources-list .placeholder {
+  text-align: center;
+  font-style: italic;
+  color: var(--muted);
+}
+
+.sources-list a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.sources-list a:hover {
+  text-decoration: underline;
+}
+
+.trending-search {
+  max-width: 100%;
+}
+
+/* =========================
+   Chat Container
+========================= */
+.chat-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 10px 20px 190px 10px;
+  position: absolute;
+  height: 100%; 
+  top: auto; 
+  left: 0; 
+  right: 0; 
+
+  
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(17,33,45,0.7);
 
   overflow-y: auto;
   scrollbar-gutter: stable;
-
-  scrollbar-width: thin; 
+  scrollbar-width: thin;
   scrollbar-color: #6c757d transparent;
-
- /* fade effect at top and bottom */
+  min-height: 0;
+  
+  /* fade effect at top and bottom */
   -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 5%, rgba(0,0,0,1) 90%, rgba(0,0,0,0) 100%);
   -webkit-mask-repeat: no-repeat;
   -webkit-mask-size: 100% 100%;
   mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 5%, rgba(0,0,0,1) 90%, rgba(0,0,0,0) 100%);
   mask-repeat: no-repeat;
   mask-size: 100% 100%;
-  transition: all 0.28s ease; 
+  transition: all 0.28s ease;
 }
 
-/* center the messages inside */
 .chat-container > * {
-  max-width: 900px;    
-  margin: 0 auto;       
   width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
-/* When sidebar pushes content, shift the fixed chat container so messages stay aligned with content */
-.app.sidebar-open .chat-container {
-  left: 320px; /* same as sidebar width */
-  right: 0;
-  width: calc(100% - 320px);
-  transition: left 0.28s ease, width 0.28s ease;
+/* =========================
+   Chat Input
+========================= */
+.chat-input {
+  display: flex;
+  align-items: flex-end;
+  background: #2d3e4f;
+  border-radius: 30px;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  width: 100%;
+  max-width: 650px;
+  flex-shrink: 0;
+  margin: 18vh auto 0;
+  gap: 8px;
+  transition: margin 0.4s ease;
+  position: absolute;
+  z-index: 5;
+}
+
+/* Initially center (vertical middle) */
+.chat-input.centered {
+  position: absolute;
+  bottom: auto;
+  top: 30%; 
+  left: 50%; 
+  transform: translate(-50%, -50%);
+  transition: left 0.28s ease, top 0.8s cubic-bezier(0.4,0,0.2,1); 
+}
+
+/* After sending → stick to bottom */
+.chat-input.bottom {
+  /* Pin to viewport bottom so input stays visible as page/content shifts */
+  position: fixed;
+  bottom: 12px; /* smaller gap from viewport edge */
+  top: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100; /* lower so the overlay can cover it in drawer mode */
+  /* unified, slightly bouncy transition for position and bottom changes */
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), bottom 0.8s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* When sidebar is open, move chat input to stay centered within pushed content area */
+.app.sidebar-open .chat-input.bottom {
+  /* In overlay/drawer mode keep the fixed input centered on the viewport */
+  left: 50%;
+  transform: translateX(-50%);
+  transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* When sidebar is open, ensure the overlay element is visible so the
+   drawer covers the content (and the chat input) */
+.app.sidebar-open .sidebar-overlay { display: block; }
+
+
+
+
+@media (max-width: 1100px) {
+  .page-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .page-container {
+    order: 2;
+  }
+
+  .sources-panel {
+    order: 1;
+  }
+
+  .trending-panel {
+    order: 3;
+  }
+
+  .chat-input {
+    margin-top: 24px;
+  }
+}
+
+@media (max-width: 700px) {
+  .chat-container {
+    padding: 16px;
+  }
+
+  .chat-input {
+    border-radius: 24px;
+    bottom: 16px;
+  }
 }
 
 /* User bubble */
@@ -925,8 +1117,8 @@ transform: translate(-50%, -58%);
   padding: 10px 14px;
   border-radius: 18px 18px 18px 4px;
   width: 100%;
-  max-width: 80%;
-  margin: 10px auto;
+  max-width: 90%;
+  margin: 10px 0;
   text-align: left;
 }
 
@@ -986,70 +1178,6 @@ transform: translate(-50%, -58%);
 .bot-message .url-row i.fa-check-circle {
   color: #4caf50;
 }
-
-
-
-/*CHAT INPUT*/ 
-.chat-input {
-  display: flex;
-  align-items: flex-end;
-  background: #2d3e4f;
-  border-radius: 30px;
-  padding: 8px 12px;
-  border: 2px solid var(--border);
-  width: 95%;
-  max-width: 650px;
-  flex-shrink: 0; 
-  margin: 0 auto 10px auto;
-  gap: 8px;
-  transition: all 0.8s ease; 
-}
-
-/* Initially center (vertical middle) */
-.chat-input.centered {
-  position: absolute;
-  top: 65%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-/* After sending → stick to bottom */
-.chat-input.bottom {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  transition: all 0.28s ease, bottom 0.8s cubic-bezier(0.4,0,0.2,1);
-}
-
-/* When sidebar is open on desktop, move the chat input horizontally to match content center */
-.app.sidebar-open .chat-input.bottom {
-  left: calc(50% + 160px); /* move half the sidebar width to remain centered relative to shifted content */
-  transition: all 0.28s ease, bottom 0.8s cubic-bezier(0.4,0,0.2,1);
-}
-
-/* Initially center (vertical middle) */
-.chat-input.centered {
-  position: absolute;
-  top: 65%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  transition: left 0.28s ease, top 0.8s cubic-bezier(0.4,0,0.2,1);
-}
-
-/* Add this block for centered chat input */
-.app.sidebar-open .chat-input.centered {
-  left: calc(50% + 160px); /* move half the sidebar width to remain centered relative to shifted content */
-  transition: left 0.28s ease, bottom 0.8s cubic-bezier(0.4,0,0.2,1);
-}
-
-@media (max-width: 900px) {
-  /* On small screens the sidebar overlays, keep chat input centered on viewport */
-  .app.sidebar-open .chat-input.bottom { left: 50%; }
-  .app.sidebar-open .chat-input.centered { left: 50%; }
-  .app.sidebar-open .chat-container { left: 0; width: 100%; }
-}
-
 
 .input-wrapper {
   display: flex;
@@ -1150,56 +1278,6 @@ transform: translate(-50%, -58%);
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-/* Trusted Sources Checkbox */
-.trusted-sources-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--muted);
-  user-select: none;
-}
-
-.trusted-sources-checkbox input[type="checkbox"] {
-  display: none;
-}
-
-.trusted-sources-checkbox .checkmark {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
-  position: relative;
-  transition: all 0.2s ease;
-}
-
-.trusted-sources-checkbox input[type="checkbox"]:checked + .checkmark {
-  background: var(--brand-veri);
-  border-color: var(--brand-veri);
-}
-
-.trusted-sources-checkbox input[type="checkbox"]:checked + .checkmark::after {
-  content: "✓";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 10px;
-  font-weight: bold;
-}
-
-.trusted-sources-checkbox:hover .checkmark {
-  border-color: var(--brand-veri);
-}
-
-.label-text {
-  font-size: 11px;
-  font-weight: 500;
 }
 
 /* Search Box */
@@ -1491,7 +1569,10 @@ transform: translate(-50%, -58%);
   border: 1px solid var(--border);
   border-radius: 10px;
   width: 100%;
-  max-width: 560px;
+  max-width: 800px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 10px 30px rgba(0,0,0,0.35);
   opacity: 0;
   transition: opacity 0.25s ease;
@@ -1517,8 +1598,30 @@ transform: translate(-50%, -58%);
 
 .modal .modal-body {
   padding: 14px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: #6c757d transparent;
+}
+
+.modal .modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal .modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal .modal-body::-webkit-scrollbar-thumb {
+  background: #6c757d;
+  border-radius: 4px;
+}
+
+.modal .modal-body::-webkit-scrollbar-thumb:hover {
+  background: #8a90a0;
 }
 
 .modal .modal-body textarea {
@@ -1537,6 +1640,57 @@ transform: translate(-50%, -58%);
   opacity: 0.9;
 }
 
+
+/* Archive modal accordion styling */
+.modal #archiveAccordion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 120%;
+}
+
+/* Targeted archive modal sizing and internal scroll
+   Keeps header/footer fixed and allows only the modal body
+   (where `#archiveAccordion` lives) to scroll so items do not shrink. */
+#archiveModal .modal-body {
+  max-height: calc(10 * 60px); /* height of 5 items */
+  overflow-y: auto;
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: #6c757d transparent;
+  scroll-behavior: smooth;
+}
+
+
+#archiveModal .modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+#archiveModal .modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+#archiveModal .modal-body::-webkit-scrollbar-thumb {
+  background: #6c757d;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+#archiveModal #archiveAccordion {
+  display: block;
+  width: 100%;
+}
+
+#archiveModal #archiveAccordion .accordion-item {
+  margin-bottom: 10px;
+}
+
+#archiveModal .accordion {
+  display: block;
+}
+
 .modal .modal-meta {
   display: flex;
   justify-content: flex-end;
@@ -1544,13 +1698,7 @@ transform: translate(-50%, -58%);
   font-size: 12px;
 }
 
-.modal .modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 14px;
-  border-top: 1px solid rgba(255,255,255,0.15);
-}
+
 
 .btn-primary, .btn-secondary {
   border: none;

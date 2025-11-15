@@ -31,6 +31,69 @@ function handleTopbarZoomHide() {
 
 window.addEventListener('resize', handleTopbarZoomHide);
 window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
+
+
+
+
+
+
+//SOURCES
+  const SOURCE_DOMAIN_FALLBACKS = [
+    'reuters.com',
+    'associatedpress.com',
+    'example.com',
+    'factcheck.org',
+    'who.int'
+  ];
+
+  function buildSourcesForTopic(topic = '') {
+    const safeTopic = topic
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'reference';
+
+    return SOURCE_DOMAIN_FALLBACKS.map((domain, index) => ({
+      label: `${domain} — reference ${index + 1}`,
+      url: `https://${domain}/search?q=${encodeURIComponent(safeTopic)}`
+    }));
+  }
+
+  function updateSourcesList(sources = []) {
+    const list = document.getElementById('sourcesList');
+    if (!list) return;
+
+    list.innerHTML = '';
+
+    if (!sources.length) {
+      const placeholder = document.createElement('li');
+      placeholder.className = 'placeholder';
+      placeholder.textContent = 'No sources yet.';
+      list.appendChild(placeholder);
+      return;
+    }
+
+    sources.forEach((source) => {
+      const item = document.createElement('li');
+      if (source.url) {
+        const link = document.createElement('a');
+        link.href = source.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = source.label;
+        item.appendChild(link);
+      } else {
+        item.textContent = source.label;
+      }
+      list.appendChild(item);
+    });
+  }
+
+
+
+
+
+
  
   // Send Message
   function sendMessage() {
@@ -123,58 +186,46 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
       botMsg.className = "bot-message";
         botMsg.innerHTML = `
           <div class="accordion-item">
-            <div class="accordion-header">
-              <div class="url-row">
-                <strong>Response</strong>
-                <span class="response-title">earthquake</span>
-              </div>
-              <div class="card-right">
-                <button class="icon-btn save-response-btn" type="button" title="Save response"><i class="fa fa-save"></i></button>
-              </div>
-              <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+          <div class="accordion-header">
+            <div class="url-row">
+              <strong>Response</strong>
+              <span class="response-title">${message}</span>
             </div>
-            <div class="accordion-content">
-              <div class="response-section">
-                <strong>Summary:</strong>
-                <p class="resp-summary">On September 30 there is a 6.7 magnitude earthquake in Cebu.......</p>
-                <hr>
-                <strong>Top 5 sources</strong>
-                <ol class="resp-sources">
-                  <li><a href="https://example.com/1" target="_blank">Example.com</a></li>
-                  <li><a href="https://example.com/2" target="_blank">Example.com</a></li>
-                  <li><a href="https://example.com/3" target="_blank">Example.com</a></li>
-                  <li><a href="https://example.com/4" target="_blank">Example.com</a></li>
-                  <li><a href="https://example.com/5" target="_blank">Example.com</a></li>
-                </ol>
-                <hr>
-                <strong>Analysis</strong>
-                <p class="resp-analysis">According to the summary this is <strong>75% accurate</strong></p>
-
-                <!-- Accuracy range bar -->
-                <div class="accuracy-card response-accuracy-card">
-                  <div class="accuracy-bar">
-                    <span class="true-label"><i class="fa fa-check-circle"></i> <span class="true-percent">75</span>%</span>
-                    <div class="bar range-bar">
-                      <div class="true" style="width: 75%"></div>
-                      <div class="false" style="width: 25%"></div>
-                    </div>
-                    <span class="false-label"><span class="false-percent">25</span>% <i class="fa fa-exclamation-triangle"></i></span>
-                  </div>
-                </div>
-
-                <hr>
-                <strong>Key findings:</strong>
-                <ul class="resp-keyfindings">
-                  <li>3 out of five articles provide accurate information</li>
-                  <li>2 out of five articles provide inaccurate information</li>
-                </ul>
-              </div>
+            <div class="card-right">
+              <button class="icon-btn save-response-btn" type="button" title="Save response"><i class="fa fa-save"></i></button>
             </div>
+            <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
           </div>
-        `;
+          <div class="accordion-content">
+            <strong>Summary:</strong>
+            <p class="resp-summary">This is a summary for \"${message}\".</p>
+            <hr>
+            <strong>Analysis</strong>
+            <p class="resp-analysis">According to the summary this is <strong>75% accurate</strong></p>
+            <div class="accuracy-card response-accuracy-card">
+              <div class="accuracy-bar">
+                <span class="true-label"><i class="fa fa-check-circle"></i> <span class="true-percent">75</span>%</span>
+                <div class="bar range-bar">
+                  <div class="true" style="width: 75%"></div>
+                  <div class="false" style="width: 25%"></div>
+                </div>
+                <span class="false-label"><span class="false-percent">25</span>% <i class="fa fa-exclamation-triangle"></i></span>
+              </div>
+            </div>
+            <hr>
+            <strong>Key findings:</strong>
+            <ul class="resp-keyfindings">
+              <li>3 out of five articles provide accurate information</li>
+              <li>2 out of five articles provide inaccurate information</li>
+            </ul>
+          </div>
+        </div>
+      `;
       
       chatBox.appendChild(botMsg);
       chatBox.scrollTop = chatBox.scrollHeight; // auto scroll
+      const responseTopic = botMsg.querySelector('.resp-title-text')?.textContent || 'analysis';
+      updateSourcesList(buildSourcesForTopic(responseTopic));
 
       // Enable toggle for this accordion
       const toggleBtn = botMsg.querySelector(".accordion-toggle");
@@ -194,11 +245,11 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
       if (saveBtn) {
         saveBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          saveResponseToSidebar(botMsg);
+          saveResponseToArchive(botMsg);
           // mark as saved
           saveBtn.classList.add('saved');
           saveBtn.title = 'Saved';
-          showNotification('Saved response to History', 'success');
+          showNotification('Saved response to Archive', 'success');
         });
       }
 
@@ -291,15 +342,7 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
                     <strong>Summary:</strong>
                     <p class="resp-summary">${msg.response_text}</p>
                     <hr>
-                    <strong>Top 5 sources (Example)</strong>
-                    <ol class="resp-sources">
-                      <li><a href="#">Example.com</a></li>
-                      <li><a href="#">Example.com</a></li>
-                      <li><a href="#">Example.com</a></li>
-                      <li><a href="#">Example.com</a></li>
-                      <li><a href="#">Example.com</a></li>
-                    </ol>
-                    <hr>
+    
                     <strong>Analysis</strong>
                     <p class="resp-analysis">According to the summary this is <strong>75% accurate</strong></p>
                     <div class="accuracy-card response-accuracy-card">
@@ -345,10 +388,10 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
             if (restoredSaveBtn) {
               restoredSaveBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                saveResponseToSidebar(botMsg);
+                saveResponseToArchive(botMsg);
                 restoredSaveBtn.classList.add('saved');
                 restoredSaveBtn.title = 'Saved';
-                showNotification('Saved response to History', 'success');
+                showNotification('Saved response to Archive', 'success');
               });
             }
           }
@@ -721,7 +764,21 @@ const textarea = document.querySelector('.chat-input textarea');
     return existing ? existing.length : 0;
   })();
 
-  // Save a bot response into the sidebar history (UI + optional backend)
+  // Save a bot response into the Archived Modal (UI + optional backend)
+  function saveResponseToArchive(botMsg) {
+    if (!botMsg) return;
+
+    const title = botMsg.querySelector('.resp-title-text') ? botMsg.querySelector('.resp-title-text').textContent.trim() : (botMsg.querySelector('.response-title') ? botMsg.querySelector('.response-title').textContent.trim() : 'Untitled');
+    const summary = botMsg.querySelector('.resp-summary') ? botMsg.querySelector('.resp-summary').textContent.trim() : '';
+    const sourcesEls = botMsg.querySelectorAll('.resp-sources li');
+    const sources = Array.from(sourcesEls).map(li => li.textContent.trim()).slice(0,5);
+
+    const archived = JSON.parse(localStorage.getItem('verifact_archived_responses') || '[]');
+    const archiveId = 'arch-' + Date.now();
+    archived.push({id: archiveId, title: title, summary: summary, sources: sources, timestamp: new Date().toISOString()});
+    localStorage.setItem('verifact_archived_responses', JSON.stringify(archived));
+  }
+
   function saveResponseToSidebar(botMsg) {
     if (!botMsg) return;
 
@@ -757,7 +814,12 @@ const textarea = document.querySelector('.chat-input textarea');
     `;
 
     // Insert at top
+    // Assign a stable archive id and insert at top
+    const archiveId = 'arch-' + Date.now();
+    item.dataset.archiveId = archiveId;
     accordion.insertBefore(item, accordion.firstChild);
+
+
 
     // Wire up toggle for new item using auto-sizing helpers
     const toggle = item.querySelector('.accordion-toggle');
@@ -1659,10 +1721,10 @@ const textarea = document.querySelector('.chat-input textarea');
         if (saveBtn) {
           saveBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            saveResponseToSidebar(botMsg);
+            saveResponseToArchive(botMsg);
             saveBtn.classList.add('saved');
             saveBtn.title = 'Saved';
-            showNotification('Saved response to History', 'success');
+            showNotification('Saved response to Archive', 'success');
           });
         }
   
@@ -1704,3 +1766,285 @@ const textarea = document.querySelector('.chat-input textarea');
     div.textContent = text;
     return div.innerHTML;
   }
+
+
+
+
+
+  
+
+  // ARCHIVE MODAL FUNCTIONALITY (populate from sidebar, open item, delete, clear)
+  document.addEventListener('DOMContentLoaded', function() {
+    const openBtn = document.getElementById('openArchiveModal');
+    const archiveModal = document.getElementById('archiveModal');
+    const archiveAccordion = document.getElementById('archiveAccordion');
+    const archiveClearAll = document.getElementById('archiveClearAll');
+
+    if (!openBtn || !archiveModal || !archiveAccordion) return;
+
+    function closeArchive() {
+      archiveModal.classList.remove('open');
+      archiveModal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+
+    function openArchive() {
+      populateArchiveList();
+      archiveModal.classList.add('open');
+      archiveModal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      // Auto-scroll modal-body to the bottom
+      const modalBody = archiveModal.querySelector('.modal-body');
+      if (modalBody && modalBody.scrollHeight > modalBody.clientHeight) {
+        modalBody.scrollTop = modalBody.scrollHeight;
+      }
+    }
+
+    function populateArchiveList() {
+      archiveAccordion.innerHTML = '';
+      const archived = JSON.parse(localStorage.getItem('verifact_archived_responses') || '[]');
+      
+      if (!archived || archived.length === 0) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'placeholder';
+        placeholder.style.padding = '12px';
+        placeholder.textContent = 'No archived responses.';
+        archiveAccordion.appendChild(placeholder);
+        return;
+      }
+
+      archived.forEach(archiveData => {
+        const id = archiveData.id;
+
+        // Create accordion item from archived data
+        const item = document.createElement('div');
+        item.className = 'accordion-item';
+        item.dataset.archiveId = id;
+
+        const sourcesHtml = (archiveData.sources || []).map(s => `<li>${escapeHtml(s)}</li>`).join('');
+
+        item.innerHTML = `
+          <div class="accordion-header">
+            <div class="card-left">
+              <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
+              <span class="item-title">${escapeHtml(archiveData.title || 'Untitled')}</span>
+            </div>
+            <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle"><i class="fa fa-angle-double-down"></i></button>
+            <div class="card-right">
+              <button class="btn-secondary archive-delete-btn" data-archive-id="${id}" type="button">Delete</button>
+            </div>
+          </div>
+          <div class="accordion-content">
+            <p class="sidebar-summary">${escapeHtml(archiveData.summary || '')}</p>
+            ${sourcesHtml ? `<ul class="sidebar-sources">${sourcesHtml}</ul>` : ''}
+          </div>
+        `;
+
+        // Wire toggle for accordion
+        const toggleBtn = item.querySelector('.accordion-toggle');
+        if (toggleBtn) {
+          toggleBtn.addEventListener('click', () => {
+            if (item.classList.contains('open')) {
+              closeAccordion(item);
+              toggleBtn.setAttribute('aria-expanded', 'false');
+            } else {
+              openAccordion(item);
+              toggleBtn.setAttribute('aria-expanded', 'true');
+            }
+          });
+        }
+
+        archiveAccordion.appendChild(item);
+      });
+    }
+
+    // Delegated handlers inside archive accordion
+    archiveAccordion.addEventListener('click', function(e) {
+      const delTarget = e.target.closest('.archive-delete-btn');
+      if (delTarget) {
+        const id = delTarget.dataset.archiveId;
+        // Show confirmation dialog for single delete
+        const confirmationBox = document.createElement('div');
+        confirmationBox.className = 'custom-confirmation';
+        confirmationBox.setAttribute('role', 'dialog');
+        confirmationBox.setAttribute('aria-modal', 'true');
+        confirmationBox.innerHTML = `
+          <div class="confirmation-content">
+            <p>Are you sure you want to delete this item?</p>
+            <div class="confirmation-buttons">
+              <button class="confirm-yes">Yes</button>
+              <button class="confirm-no">No</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(confirmationBox);
+        const yesBtn = confirmationBox.querySelector('.confirm-yes');
+        const noBtn = confirmationBox.querySelector('.confirm-no');
+        if (yesBtn) yesBtn.focus();
+        yesBtn.addEventListener('click', () => {
+          // Remove from localStorage
+          const archived = JSON.parse(localStorage.getItem('verifact_archived_responses') || '[]');
+          const filtered = archived.filter(item => item.id !== id);
+          localStorage.setItem('verifact_archived_responses', JSON.stringify(filtered));
+          // Remove from modal
+          const modalItem = archiveAccordion.querySelector(`.accordion-item[data-archive-id="${id}"]`);
+          if (modalItem && modalItem.parentNode) modalItem.parentNode.removeChild(modalItem);
+          if (!archiveAccordion.querySelector('.accordion-item')) {
+            archiveAccordion.innerHTML = '<div class="placeholder" style="padding:12px">No archived responses.</div>';
+          }
+          confirmationBox.remove();
+        });
+        noBtn.addEventListener('click', () => confirmationBox.remove());
+        // ESC support
+        const escHandler = (e) => { if (e.key === 'Escape') { confirmationBox.remove(); document.removeEventListener('keydown', escHandler); } };
+        document.addEventListener('keydown', escHandler);
+        return;
+      }
+    });
+
+    openBtn.addEventListener('click', function() {
+      openArchive();
+    });
+
+    archiveModal.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', closeArchive));
+
+    if (archiveClearAll) {
+      archiveClearAll.addEventListener('click', function(){
+        // Show confirmation dialog for clear all
+        const confirmationBox = document.createElement('div');
+        confirmationBox.className = 'custom-confirmation';
+        confirmationBox.setAttribute('role', 'dialog');
+        confirmationBox.setAttribute('aria-modal', 'true');
+        confirmationBox.innerHTML = `
+          <div class="confirmation-content">
+            <p>Are you sure you want to clear all the items?</p>
+            <div class="confirmation-buttons">
+              <button class="confirm-yes">Yes</button>
+              <button class="confirm-no">No</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(confirmationBox);
+        const yesBtn = confirmationBox.querySelector('.confirm-yes');
+        const noBtn = confirmationBox.querySelector('.confirm-no');
+        if (yesBtn) yesBtn.focus();
+        yesBtn.addEventListener('click', () => {
+          localStorage.setItem('verifact_archived_responses', JSON.stringify([]));
+          archiveAccordion.innerHTML = '<div class="placeholder" style="padding:12px">No archived responses.</div>';
+          confirmationBox.remove();
+        });
+        noBtn.addEventListener('click', () => confirmationBox.remove());
+        // ESC support
+        const escHandler = (e) => { if (e.key === 'Escape') { confirmationBox.remove(); document.removeEventListener('keydown', escHandler); } };
+        document.addEventListener('keydown', escHandler);
+      });
+    }
+
+    archiveModal.addEventListener('click', function(e) {
+      if (e.target === archiveModal) closeArchive();
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && archiveModal.classList.contains('open')) closeArchive();
+    });
+  });
+
+
+
+
+
+  // Chat textarea autosize and sync chat-input height into CSS variable
+function syncChatInputHeight() {
+  const textarea = document.querySelector('.chat-input textarea');
+  const chatInput = document.querySelector('.chat-input');
+  if (!textarea || !chatInput) return;
+
+  // Reset then measure scrollHeight
+  textarea.style.height = 'auto';
+  const max = 180; // max height for textarea before internal scrolling
+  const target = Math.min(textarea.scrollHeight, max);
+  textarea.style.height = target + 'px';
+
+  // toggle internal scrollbar when exceeding max
+  if (textarea.scrollHeight > max) textarea.style.overflowY = 'auto';
+  else textarea.style.overflowY = 'hidden';
+
+  // compute full chat-input height and expose as CSS var
+  const rect = chatInput.getBoundingClientRect();
+  const total = Math.ceil(rect.height);
+  document.documentElement.style.setProperty('--chat-input-height', total + 'px');
+}
+
+// Set up listeners when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  const textarea = document.querySelector('.chat-input textarea');
+  const sendBtn = document.querySelector('.chat-input .send-btn');
+  const chatInput = document.querySelector('.chat-input');
+  if (!textarea || !sendBtn || !chatInput) return;
+
+  // initial class state
+  chatInput.classList.add('centered');
+
+  // input auto-resize
+  textarea.addEventListener('input', () => {
+    syncChatInputHeight();
+  });
+
+  // also sync on images/fonts/load+resize to keep padding accurate
+  window.addEventListener('resize', syncChatInputHeight);
+  window.addEventListener('load', syncChatInputHeight);
+
+  // when sending, clear and ensure input moves to bottom
+  sendBtn.addEventListener('click', () => {
+    const message = textarea.value.trim();
+    if (message !== '') {
+      // move input to bottom
+      chatInput.classList.remove('centered');
+      chatInput.classList.add('bottom');
+
+      // clear and reset
+      textarea.value = '';
+      textarea.style.height = 'auto';
+      syncChatInputHeight();
+    }
+  });
+
+  // ensure sync at startup
+  syncChatInputHeight();
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+  // New Chat button functionality
+  const newChatBtn = document.querySelector('button[aria-label="New Chat"]');
+  if (newChatBtn) {
+    newChatBtn.addEventListener('click', function () {
+      // Clear messages in chat area
+      const chatBox = document.getElementById('chatBox');
+      if (chatBox) chatBox.innerHTML = '';
+      // Optionally clear sources panel
+      const sourcesList = document.getElementById('sourcesList');
+      if (sourcesList) {
+        sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
+      }
+      // Reset chat input to centered
+      const chatInput = document.getElementById('chatInput');
+      if (chatInput) {
+        chatInput.classList.remove('bottom');
+        chatInput.classList.add('centered');
+      }
+      // Clear the textarea/input
+      const textarea = document.querySelector('.chat-input textarea');
+      if (textarea) {
+        textarea.value = '';
+        textarea.style.height = 'auto';
+      }
+      // (Future) Multi-session support stub: save current session if desired
+      // and start a new session, keeping sidebar/history visible.
+      //
+      // Example:
+      // saveCurrentSessionToHistory();
+      // createNewSession();
+      // updateSidebarSessions();
+    });
+  }
+});

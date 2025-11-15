@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="css/style.css">
@@ -50,86 +51,7 @@
 
             <div class="sidebar-content">
                 <div class="accordion">
-                    <div class="accordion-item">
-                        <div class="accordion-header">
-                            <div class="card-left">
-                            <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
-                            <span class="item-title">Untitled</span>
-                        </div>
-
-                            <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
-                                <i class="fa fa-angle-double-down"></i>
-                            </button>
-
-                            <div class="card-right">
-                                <button class="icon-btn more-btn" aria-label="More" type="button">
-                                    <i class="fa fa-ellipsis-v"></i>
-                                </button>
-                                <label class="checkbox" aria-label="Select">
-                                    <input type="checkbox">
-                                    <span></span>
-                                </label>
-                            </div>
-
-                        </div>
-                        <div class="accordion-content" hidden>
-                            <div class="s-line long"></div>
-                            <div class="s-line"></div>
-                            <div class="s-line short"></div>
-                        </div>
-                    </div>
-
-                    <div class="accordion-item">
-                        <div class="accordion-header">
-                            <div class="card-left">
-                                <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
-                                <span class="item-title">Untitled</span>
-                            </div>
-                            <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
-                                <i class="fa fa-angle-double-down"></i>
-                            </button>
-                        <div class="card-right">
-                            <button class="icon-btn more-btn" aria-label="More" type="button">
-                                <i class="fa fa-ellipsis-v"></i>
-                            </button>
-                            <label class="checkbox" aria-label="Select">
-                                <input type="checkbox">
-                                <span></span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="accordion-content" hidden>
-                        <div class="s-line long"></div>
-                        <div class="s-line"></div>
-                        <div class="s-line short"></div>
-                    </div>
-                </div>
-
-                <div class="accordion-item">
-                    <div class="accordion-header">
-                        <div class="card-left">
-                            <div class="mini-icon" aria-hidden="true"><i class="fa fa-file-text-o"></i></div>
-                            <span class="item-title">Untitled</span>
-                        </div>
-                        <button class="accordion-toggle" aria-expanded="false" aria-label="Toggle">
-                            <i class="fa fa-angle-double-down"></i>
-                        </button>
-                        <div class="card-right">
-                            <button class="icon-btn more-btn" aria-label="More" type="button">
-                                <i class="fa fa-ellipsis-v"></i>
-                            </button>
-                            <label class="checkbox" aria-label="Select">
-                                <input type="checkbox">
-                                <span></span>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="accordion-content" hidden>
-                        <div class="s-line long"></div>
-                        <div class="s-line"></div>
-                        <div class="s-line short"></div>
-                    </div>
-                </div>
+                    
             </div>
         </aside>
 
@@ -146,17 +68,14 @@
 
         <!--CHAT TAB-->
         <section id="chat-content" class="tab-content">
-          
-            <section id="chat-content" class="tab-content">
-                <section class="section-header">
+            <section class="section-header">
                     <div class="title">
                         <button class="icon-btn" id="sidebarToggle" aria-label="Toggle Sidebar"><i class="fa fa-bars"></i></button>
                         <span class="title-icon" aria-hidden="true"><i class="fa fa-comments"></i></span>
                         <span>CHAT</span>
                     </div>
                                         <div class="actions">
-                                            <button class="icon-btn" aria-label="Save All"><i class="fa fa-floppy-disk"></i></button>
-                                            <button class="icon-btn" aria-label="Reset All"><i class="fa fa-refresh"></i></button>
+                                            <button class="icon-btn" aria-label="New Chat"><i class="fa fa-pen-to-square"></i></button>
                                             <div class="dropdown">
                                                 <button class="icon-btn" id="settingsBtn" aria-label="Settings">
                                                     <i class="fa fa-cog"></i>
@@ -173,7 +92,7 @@
 
                                                     <div class="divider"></div>
 
-                                                    <a href="archive.html"><i class="fa fa-archive"></i>Archive</a>
+                                                    <button type="button" id="openArchiveModal"><i class="fa fa-archive"></i> Archive</button>
                                                     <a href="auth.html" style="color: #e34234;"><i class="fa fa-sign-out" style="color: #e34234;"></i> Sign Out</a>
 
                                                     <div class="divider"></div>
@@ -181,43 +100,60 @@
                                                 </div>
                                             </div>
                                     </div>
+            </section>
+
+            <!--CHAT AREA-->
+            <div class="page-layout">
+                <aside class="page-container sources-panel">
+                    <div class="panel-header">
+                        <h2>Sources</h2>
+                    </div>
+                    <ul id="sourcesList" class="sources-list">
+                        <li class="placeholder">No sources yet.</li>
+                    </ul>
+                </aside>
+
+                <section class="page-container chat-panel">
+                    <div class="chat-container" id="chatContainer">
+                        <div class="chat-box" id="chatBox"></div>
+                    </div>
+
+                    <!-- Chat input moved outside the scrollable chat container so the
+                         container provides the scrollbar and the input stays fixed
+                         (positioned relative to .chat-panel). -->
+                    <div class="chat-input centered" id="chatInput">
+                        <div class="input-wrapper">
+                            <label for="userInput" class="sr-only">Ask A Question...</label>
+                            <textarea id="userInput" name="userInput" placeholder="Ask A Question..." rows="1"></textarea>
+
+                            <div class="bottom-row">
+                                <div class="left-icons"></div>
+
+                                <div class="right-icons">
+                                    <button class="mic-btn" aria-label="Voice Input" type="button"><i class="fas fa-microphone"></i></button>
+                                    <button onclick="sendMessage()" aria-label="Send Message" class="send-btn" type="button"><i class="fas fa-arrow-up"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
-            
-
-                <!--CHAT AREA-->
-                <div class="chat-container">
-                  <div class="chat-box" id="chatBox"></div>
-                </div>
-
-                <div class="chat-input centered" id="chatInput">
-                  <div class="input-wrapper">
-                    <!-- Textarea at top -->
-                     <label for="userInput" class="sr-only">Ask A Question...</label>
-                    <textarea id="userInput" name="userInput" placeholder="Ask A Question..." rows="1"></textarea>
-
-                    <!-- Bottom row icons -->
-                    <div class="bottom-row">
-                      <div class="left-icons">
-                        <button for="imageUpload" class="img-btn" type="button">
-                          <i class="fas fa-image"></i>
-                        </button>
-                        <label class="trusted-sources-checkbox">
-                          <input type="checkbox" id="trustedSources" name="use_trusted_sources">
-                          <span class="checkmark"></span>
-                          <span class="label-text">Trusted Sources</span>
-                        </label>
-                      </div>
-
-                      <div class="right-icons">
-                        <button class="mic-btn" type="button"><i class="fas fa-microphone"></i></button>
-                        <button onclick="sendMessage()" class="send-btn" type="button"><i class="fas fa-arrow-up"></i></button>
-                      </div>
+                <aside class="page-container trending-panel">
+                    <div class="panel-header">
+                        <h2>Trending</h2>
+                        <div class="search-box trending-search">
+                            <input type="text" id="trendingSearchInput" placeholder="Search topics..." aria-label="Search trending topics" />
+                            <button type="button" aria-label="Search trending topics"><i class="fas fa-search"></i></button>
+                        </div>
                     </div>
-                  </div>
-                </div>
-
-
+                    <ul id="trendingList" class="trending-list">
+                        <li>Global earthquake updates</li>
+                        <li>Climate change reports</li>
+                        <li>Technology breakthroughs</li>
+                        <li>Healthcare innovations</li>
+                    </ul>
+                </aside>
+            </div>
         </section>
         </main>
 
@@ -242,7 +178,33 @@
             </div>
         </div>
 
+        <!-- Archive Modal -->
+        <div id="archiveModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="archiveTitle">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="archiveTitle">Archived Responses</h3>
+                    <button class="icon-btn" type="button" aria-label="Close" data-close><i class="fa fa-times"></i></button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-meta" style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
+                        <button id="archiveClearAll" class="btn-secondary" type="button">Clear All</button>
+                        <div style="flex:1"></div>
+                        <span class="sr-only">Archived responses list</span>
+                        <div class="search-box">
+                            <input type="text" placeholder="Search..." />
+                            <button><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                    <div id="archiveAccordion" class="accordion" style="padding:6px 0;">
+                        <!-- Archived accordion items will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script src="js/home.js"></script>
+        <script src="js/function.js"></script>
+
 
         
 </body>
