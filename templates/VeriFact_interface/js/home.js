@@ -80,7 +80,29 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
         link.href = source.url;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        link.textContent = source.label;
+        // Add visual trust indicator if available
+        if (source.is_trusted !== undefined) {
+          const icon = document.createElement('i');
+          icon.className = source.is_trusted ? 'fa fa-check-circle' : 'fa fa-exclamation-triangle';
+          icon.style.cssText = source.is_trusted 
+            ? 'color:#4caf50; margin-right: 8px;' 
+            : 'color:#e53935; margin-right: 8px;';
+          icon.title = source.is_trusted ? 'Trusted Source' : 'Unverified Source';
+          link.appendChild(icon);
+        }
+        // Extract domain from URL for display format: "sitename - title"
+        let displayText = source.label;
+        try {
+          const urlObj = new URL(source.url);
+          const domain = urlObj.hostname.replace('www.', ''); // Remove www. prefix
+          const title = source.label || source.title || 'Untitled';
+          displayText = `${domain} - ${title}`;
+        } catch (e) {
+          // If URL parsing fails, just use the label as-is
+          displayText = source.label || source.title || 'Unknown Source';
+        }
+        // Add text content
+        link.appendChild(document.createTextNode(displayText));
         item.appendChild(link);
       } else {
         item.textContent = source.label;
@@ -770,8 +792,13 @@ const textarea = document.querySelector('.chat-input textarea');
 
     const title = botMsg.querySelector('.resp-title-text') ? botMsg.querySelector('.resp-title-text').textContent.trim() : (botMsg.querySelector('.response-title') ? botMsg.querySelector('.response-title').textContent.trim() : 'Untitled');
     const summary = botMsg.querySelector('.resp-summary') ? botMsg.querySelector('.resp-summary').textContent.trim() : '';
-    const sourcesEls = botMsg.querySelectorAll('.resp-sources li');
-    const sources = Array.from(sourcesEls).map(li => li.textContent.trim()).slice(0,5);
+    // Get sources from sources panel instead of chat message
+    const sourcesList = document.getElementById('sourcesList');
+    const sourcesEls = sourcesList ? sourcesList.querySelectorAll('li:not(.placeholder)') : [];
+    const sources = Array.from(sourcesEls).map(li => {
+      const link = li.querySelector('a');
+      return link ? link.textContent.trim() : li.textContent.trim();
+    }).slice(0, 5);
 
     const archived = JSON.parse(localStorage.getItem('verifact_archived_responses') || '[]');
     const archiveId = 'arch-' + Date.now();
@@ -784,8 +811,13 @@ const textarea = document.querySelector('.chat-input textarea');
 
     const title = botMsg.querySelector('.resp-title-text') ? botMsg.querySelector('.resp-title-text').textContent.trim() : (botMsg.querySelector('.response-title') ? botMsg.querySelector('.response-title').textContent.trim() : 'Untitled');
     const summary = botMsg.querySelector('.resp-summary') ? botMsg.querySelector('.resp-summary').textContent.trim() : '';
-    const sourcesEls = botMsg.querySelectorAll('.resp-sources li');
-    const sources = Array.from(sourcesEls).map(li => li.textContent.trim()).slice(0,5);
+    // Get sources from sources panel instead of chat message
+    const sourcesList = document.getElementById('sourcesList');
+    const sourcesEls = sourcesList ? sourcesList.querySelectorAll('li:not(.placeholder)') : [];
+    const sources = Array.from(sourcesEls).map(li => {
+      const link = li.querySelector('a');
+      return link ? link.textContent.trim() : li.textContent.trim();
+    }).slice(0, 5);
 
     // Create sidebar accordion item
     const accordion = document.querySelector('.sidebar-content .accordion');
@@ -1636,14 +1668,19 @@ const textarea = document.querySelector('.chat-input textarea');
         const botMsg = document.createElement("div");
         botMsg.className = "bot-message";
         
-        // Build sources HTML with trust indicators
-        const sourcesHTML = data.sources.map((source, idx) => {
-          const icon = source.is_trusted 
-            ? '<i class="fa fa-check-circle" style="color:#4caf50;" title="Trusted Source"></i>' 
-            : '<i class="fa fa-exclamation-triangle" style="color:#e53935;" title="Unverified Source"></i>';
-          return `<li>${icon} <a href="${source.url}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></li>`;
-        }).join('');
-  
+        // Convert sources to format for sources panel with trust indicators
+        const sourcesForPanel = data.sources.map((source) => {
+          return {
+            label: source.title, // Keep label for backward compatibility
+            title: source.title,  // Also pass title explicitly for formatting
+            url: source.url,
+            is_trusted: source.is_trusted
+          };
+        });
+        
+        // Update sources panel with scraped sources
+        updateSourcesList(sourcesForPanel);
+
         botMsg.innerHTML = `
           <div class="accordion-item">
             <div class="accordion-header">
@@ -1662,9 +1699,6 @@ const textarea = document.querySelector('.chat-input textarea');
               <div class="response-section">
                 <strong>Summary:</strong>
                 <p class="resp-summary">${escapeHtml(data.summary)}</p>
-                <hr>
-                <strong>Top ${data.total_count} Sources:</strong>
-                <ol class="resp-sources">${sourcesHTML}</ol>
                 <hr>
                 <strong>Analysis</strong>
                 <p class="resp-analysis">According to the analysis, this information is <strong>${data.accuracy.true_percent}% credible</strong> based on source reliability.</p>
@@ -1729,9 +1763,9 @@ const textarea = document.querySelector('.chat-input textarea');
         }
   
         // Update chat response in database (for follow-up messages)
+        // Sources are now in the sources panel, so we only save the summary
         if (!isFirstMessage) {
-          const responseText = `${data.summary}\n\nSources: ${data.sources.map(s => s.url).join(', ')}`;
-          updateChatResponse(id, responseText);
+          updateChatResponse(id, data.summary);
         }
         
       } else {

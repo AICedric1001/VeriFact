@@ -127,7 +127,7 @@ def analyze_text(text):
     return [(ent.text, ent.label_) for ent in doc.ents]
 
 # --- Full System Workflow ---
-def main_system(query, api_key=None, use_trusted_sources=False):
+def main_system(query, api_key=None, use_trusted_sources=True):
     print(f"\n🔎 Searching for: {query}")
     
     # Add a small random delay to prevent rapid successive requests
@@ -242,9 +242,49 @@ def main_system(query, api_key=None, use_trusted_sources=False):
         except Exception as e:
             print(f"❌ Alternative search failed: {e}")
 
+    # If no results found from trusted sources, fallback to searching all sources
+    if len(links_with_meta) == 0 and use_trusted_sources and site_filter:
+        print("⚠️  No results from trusted sources. Falling back to searching all sources...")
+        try:
+            if api_key or os.getenv("SERPAPI_API_KEY"):
+                print("🛰️  Retrying SerpAPI without trusted sources filter...")
+                effective_key = api_key or os.getenv("SERPAPI_API_KEY") or os.getenv("SERPAPI_KEY")
+                
+                # Search without site filter
+                params = {
+                    "engine": "google",
+                    "q": search_query,  # Original query without site filter
+                    "api_key": effective_key,
+                    "num": 10,
+                    "gl": "us",
+                    "hl": "en",
+                }
+                search_instance = GoogleSearch(params)
+                results = search_instance.get_dict()
+                
+                if 'organic_results' in results:
+                    organic = results.get('organic_results', [])[:5]
+                    links_with_meta = []
+                    for res in organic:
+                        link = res.get('link') or res.get('url')
+                        title = res.get('title')
+                        if link:
+                            links_with_meta.append({"title": title, "url": link})
+                    print(f"✅ Fallback search returned {len(links_with_meta)} results from all sources")
+            else:
+                print("🧭 Retrying Google search without trusted sources filter...")
+                try:
+                    urls = list(search(search_query, tld="com", lang="en", num=10, stop=5, pause=3.0))
+                    links_with_meta = [{"title": None, "url": url} for url in urls]
+                    print(f"✅ Fallback Google search returned {len(urls)} URLs from all sources")
+                except Exception as e:
+                    print(f"❌ Fallback Google search failed: {e}")
+        except Exception as e:
+            print(f"❌ Fallback search failed: {e}")
+
     print(f"🔗 Found {len(links_with_meta)} links")
     if len(links_with_meta) == 0:
-        print("⚠️  No links from fallback. Consider setting SERPAPI_API_KEY or retrying with a more specific query.")
+        print("⚠️  No links found. Consider retrying with a more specific query.")
         print(f"🔧 Debug - API key available: {bool(api_key or os.getenv('SERPAPI_API_KEY'))}")
         print(f"🔧 Debug - Using SerpAPI: {bool(api_key or os.getenv('SERPAPI_API_KEY'))}")
 

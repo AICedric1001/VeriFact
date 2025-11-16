@@ -82,7 +82,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="Corl4453",  #Change this to your own password
+        password="radgelwashere4453",  #Change this to your own password
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -135,7 +135,8 @@ def index():
         if 'query' in request.form:
             query = request.form['query']
             serpapi_key = request.form.get('serpapi_key') or os.getenv("SERPAPI_API_KEY") or "b78924b4496d3e2abba8b33f9e89fa5eb443f8e5ba0db605c98b5b6bae37e50c"
-            use_trusted_sources = 'use_trusted_sources' in request.form
+            # Always use trusted sources filter
+            use_trusted_sources = True
             results = main_system(query, serpapi_key, use_trusted_sources)
 
             try:
@@ -262,7 +263,8 @@ def api_scrape():
                 return jsonify({'status': 'error', 'message': 'query is required'}), 400
 
         serpapi_key = data.get('serpapi_key') or os.getenv("SERPAPI_API_KEY") or "b78924b4496d3e2abba8b33f9e89fa5eb443f8e5ba0db605c98b5b6bae37e50c"
-        use_trusted_sources = data.get('use_trusted_sources', False)
+        # Always use trusted sources filter
+        use_trusted_sources = True
         results = main_system(query, serpapi_key, use_trusted_sources)
 
         with get_db_connection() as db:
