@@ -881,5 +881,10 @@ def get_bot_response(result_id):
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
+
+@app.route('/landing')
+def landing():
+    return render_template('VeriFact_interface/landing.html')
+
 if __name__ == '__main__':
     app.run(debug=True)
