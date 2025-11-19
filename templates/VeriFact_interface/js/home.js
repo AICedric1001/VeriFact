@@ -298,44 +298,48 @@ const textarea = document.querySelector('.chat-input textarea');
 
   // Search functionality
   document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.querySelector('.search-box input');
-    const searchBtn = document.querySelector('.search-box button');
+  const searchInput = document.querySelector('#sidebarSearchInput');
+  
+  const searchBtn = document.querySelector('#sidebarSearchBtn');
+  
+  function performSearch() {
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    // Target chat history items instead of accordion items
+    const chatHistory = document.querySelector('.chat-history');
+    if (!chatHistory) return;
+    const items = chatHistory.children;
     
-    function performSearch() {
-      const searchTerm = searchInput.value.toLowerCase().trim();
-      const accordionItems = document.querySelectorAll('.sidebar-content .accordion-item');
-      
-      if (searchTerm === '') {
-        // Show all items if search is empty
-        accordionItems.forEach(item => {
-          item.style.display = '';
-        });
-        return;
+    if (searchTerm === '') {
+      // Show all items if search is empty
+      Array.from(items).forEach(item => {
+        item.style.display = '';
+      });
+      return;
+    }
+    
+    Array.from(items).forEach(item => {
+      const content = item.textContent.toLowerCase();
+      if (content.includes(searchTerm)) {
+        item.style.display = '';
+      } else {
+        item.style.display = 'none';
       }
-      
-      accordionItems.forEach(item => {
-        const content = item.textContent.toLowerCase();
-        if (content.includes(searchTerm)) {
-          item.style.display = '';
-        } else {
-          item.style.display = 'none';
-        }
-      });
-    }
-    
-    if (searchInput) {
-      searchInput.addEventListener('input', performSearch);
-      searchInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-          performSearch();
-        }
-      });
-    }
-    
-    if (searchBtn) {
-      searchBtn.addEventListener('click', performSearch);
-    }
-  });
+    });
+  }
+  
+  if (searchInput) {
+    searchInput.addEventListener('input', performSearch);
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        performSearch();
+      }
+    });
+  }
+  
+  if (searchBtn) {
+    searchBtn.addEventListener('click', performSearch);
+  }
+});
 
 
 

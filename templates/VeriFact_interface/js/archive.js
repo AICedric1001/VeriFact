@@ -173,3 +173,36 @@
       if (e.key === 'Escape' && archiveModal.classList.contains('open')) closeArchive();
     });
   });
+
+  // ARCHIVE SEARCH FUNCTIONALITY
+  document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('archiveSearchInput');
+    const searchBtn = document.getElementById('archiveSearchBtn');
+    const archiveAccordion = document.getElementById('archiveAccordion');
+    if (!searchInput || !searchBtn || !archiveAccordion) return;
+
+    function performSearch() {
+      const query = searchInput.value.trim().toLowerCase();
+      const items = archiveAccordion.querySelectorAll('.accordion-item');
+      if (query === '') {
+        // Show all items if search is empty
+        items.forEach(item => {
+          item.style.display = '';
+        });
+        return;
+      }
+      items.forEach(item => {
+        const title = item.querySelector('.item-title') ? item.querySelector('.item-title').textContent.toLowerCase() : '';
+        const summary = item.querySelector('.sidebar-summary') ? item.querySelector('.sidebar-summary').textContent.toLowerCase() : '';
+        if (title.includes(query) || summary.includes(query)) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    }
+
+    searchBtn.addEventListener('click', performSearch);
+    searchInput.addEventListener('input', performSearch);
+  });
+  

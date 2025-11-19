@@ -62,77 +62,71 @@
 
 
   // Delete Selected button functionality
-  document.addEventListener('DOMContentLoaded', function() {
-    const deleteAllBtn = document.querySelector('button[aria-label="Delete All"]');
-    if (deleteAllBtn) {
-      deleteAllBtn.addEventListener('click', function() {
-        const checkedBoxes = document.querySelectorAll('.accordion-item .checkbox input:checked');
+document.addEventListener('DOMContentLoaded', function() {
+  const deleteAllBtn = document.getElementById('deleteSelectedChats');
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener('click', function() {
+      const checkedBoxes = document.querySelectorAll('.accordion-item .checkbox input:checked');
 
-        if (checkedBoxes.length > 0) {
-          // Create a custom confirmation popup (accessible dialog)
-          const confirmationBox = document.createElement('div');
-          confirmationBox.className = 'custom-confirmation';
-          confirmationBox.setAttribute('role', 'dialog');
-          confirmationBox.setAttribute('aria-modal', 'true');
-          confirmationBox.innerHTML = `
-            <div class="confirmation-content">
-              <p>Are you sure you want to delete <strong>${checkedBoxes.length}</strong> selected item(s)?</p>
-              <div class="confirmation-buttons">
-                <button class="confirm-yes">Yes</button>
-                <button class="confirm-no">No</button>
-              </div>
+      if (checkedBoxes.length > 0) {
+        // Custom confirmation dialog
+        const confirmationBox = document.createElement('div');
+        confirmationBox.className = 'custom-confirmation';
+        confirmationBox.setAttribute('role', 'dialog');
+        confirmationBox.setAttribute('aria-modal', 'true');
+        confirmationBox.innerHTML = `
+          <div class="confirmation-content">
+            <p>Are you sure you want to delete <strong>${checkedBoxes.length}</strong> selected item(s)?</p>
+            <div class="confirmation-buttons">
+              <button class="confirm-yes">Yes</button>
+              <button class="confirm-no">No</button>
             </div>
-          `;
-          document.body.appendChild(confirmationBox);
+          </div>
+        `;
+        document.body.appendChild(confirmationBox);
 
-          // Make content focusable and move focus to the primary action
-          const content = confirmationBox.querySelector('.confirmation-content');
-          if (content) content.setAttribute('tabindex', '-1');
-          const yesBtn = confirmationBox.querySelector('.confirm-yes');
-          const noBtn = confirmationBox.querySelector('.confirm-no');
-          if (yesBtn) yesBtn.focus();
+        const yesBtn = confirmationBox.querySelector('.confirm-yes');
+        const noBtn = confirmationBox.querySelector('.confirm-no');
+        if (yesBtn) yesBtn.focus();
 
-          // Handle Yes
-          confirmationBox.querySelector('.confirm-yes').addEventListener('click', () => {
-            checkedBoxes.forEach(checkbox => {
-              const accordionItem = checkbox.closest('.accordion-item');
-              if (accordionItem) accordionItem.remove();
-            });
-
-            // Reset "select all" checkbox
-            const selectAllCheckbox = document.querySelector('.sidebar-header .checkbox input');
-            if (selectAllCheckbox) {
-              selectAllCheckbox.checked = false;
-              selectAllCheckbox.indeterminate = false;
-            }
-
-            showNotification(`${checkedBoxes.length} item(s) deleted successfully!`, 'success');
-            confirmationBox.remove();
+        yesBtn.addEventListener('click', () => {
+          checkedBoxes.forEach(checkbox => {
+            const accordionItem = checkbox.closest('.accordion-item');
+            if (accordionItem) accordionItem.remove();
           });
 
-          // Handle No
-          if (noBtn) {
-            noBtn.addEventListener('click', () => {
-              confirmationBox.remove();
-            });
+          // Reset "select all" checkbox
+          const selectAllCheckbox = document.querySelector('.sidebar-header .checkbox input');
+          if (selectAllCheckbox) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
           }
 
-          // Close on Escape key while the dialog is open
-          const escHandler = (e) => {
-            if (e.key === 'Escape') {
-              confirmationBox.remove();
-              document.removeEventListener('keydown', escHandler);
-            }
-          };
-          document.addEventListener('keydown', escHandler);
+          showNotification(`${checkedBoxes.length} item(s) deleted successfully!`, 'success');
+          confirmationBox.remove();
+        });
 
-        } else {
-          // Nothing selected → just show a message
-          showNotification('Please select at least one item to delete.', 'warning');
+        if (noBtn) {
+          noBtn.addEventListener('click', () => {
+            confirmationBox.remove();
+          });
         }
-      });
-    }
-  });
+
+        // Close on Escape key
+        const escHandler = (e) => {
+          if (e.key === 'Escape') {
+            confirmationBox.remove();
+            document.removeEventListener('keydown', escHandler);
+          }
+        };
+        document.addEventListener('keydown', escHandler);
+
+      } else {
+        showNotification('Please select at least one item to delete.', 'warning');
+      }
+    });
+  }
+});
 
 
     // Checkbox selection functionality

@@ -35,7 +35,25 @@
         <!-- Sidebar -->
         <aside id="sidebar" class="sidebar">
 
-            
+            <div class="sidebar-header">
+        <div class="title">
+          <span class="title-icon" aria-hidden="true"><i class="fa fa-history"></i></span>
+          <span>HISTORY</span>
+        </div>
+        <div class="actions">
+          <div class="search-box">
+            <input type="text" id="sidebarSearchInput" placeholder="Search..." aria-label="Search chat history" />
+            <button id="sidebarSearchBtn" type="button" aria-label="Search"><i class="fas fa-search"></i></button>
+          </div>
+          <button class="icon-btn" id="deleteSelectedChats" aria-label="Delete All">
+            <i class="fa fa-trash"></i>
+          </button>
+          <label class="checkbox" aria-label="Select All">
+            <input type="checkbox" id="select-all-chats" ${sortedConversations.length === 0 ? 'disabled' : ''}>
+            <span></span>
+          </label>
+        </div>
+      </div>
             <div class="sidebar-content">
                 <div class="chat-history">
                     <!-- Chat history items will be added here by JavaScript -->
@@ -141,18 +159,7 @@
                         </div>
                     </div>
                     <ul id="trendingList" class="trending-list">
-                        <li>Global earthquake updates</li>
-                        <li>Climate change reports</li>
-                        <li>Technology breakthroughs</li>
-                        <li>Healthcare innovations</li>
-                        <li>Global earthquake updates</li>
-                        <li>Climate change reports</li>
-                        <li>Technology breakthroughs</li>
-                        <li>Healthcare innovations</li>
-                        <li>Global earthquake updates</li>
-                        <li>Climate change reports</li>
-                        <li>Technology breakthroughs</li>
-                        <li>Healthcare innovations</li>
+                        
                     </ul>
                 </aside>
             </div>
@@ -193,8 +200,8 @@
                         <div style="flex:1"></div>
                         <span class="sr-only">Archived responses list</span>
                         <div class="search-box">
-                            <input type="text" placeholder="Search..." />
-                            <button><i class="fas fa-search"></i></button>
+                            <input type="text" id="archiveSearchInput" placeholder="Search..." aria-label="Search archived responses" />
+                            <button id="archiveSearchBtn" type="button" aria-label="Search"><i class="fas fa-search"></i></button>
                         </div>
                     </div>
                     <div id="archiveAccordion" class="accordion" style="padding:6px 0;">
