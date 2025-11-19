@@ -880,6 +880,51 @@ def get_bot_response(result_id):
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/trending', methods=['GET'])
+def get_trending():
+    """
+    Get trending categories by joining categories and searches tables,
+    grouping by category and counting occurrences.
+    Returns the most searched categories ordered by count.
+    """
+    try:
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Join categories with searches, group by entity_text, and count occurrences
+                query = """
+                    SELECT 
+                        c.entity_text,
+                        COUNT(*) as search_count
+                    FROM categories c
+                    JOIN searches s ON c.search_id = s.search_id
+                    WHERE c.entity_text IS NOT NULL 
+                      AND TRIM(c.entity_text) != ''
+                    GROUP BY c.entity_text
+                    ORDER BY search_count DESC
+                    LIMIT 20
+                """
+                cursor.execute(query)
+                trending = cursor.fetchall()
+                
+                # Convert to list of dicts for JSON response
+                trending_list = []
+                for item in trending:
+                    trending_list.append({
+                        'category': item['entity_text'],
+                        'count': item['search_count']
+                    })
+                
+                return jsonify({
+                    'status': 'success',
+                    'trending': trending_list
+                })
+                
+    except Exception as e:
+        print("❌ Get trending error:", e)
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': 'Failed to retrieve trending topics'}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)

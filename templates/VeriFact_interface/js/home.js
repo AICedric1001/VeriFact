@@ -173,6 +173,8 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
             if (scrape && scrape.status === 'success') {
               // Generate bot response with the result_id
               generateBotResponses(scrape.result_id, chatBox, true);
+              // Refresh trending topics after a new search
+              loadTrendingTopics();
             } else {
               console.error('Scrape failed:', scrape);
               showNotification('Failed to scrape sources. Please try again.', 'error');
@@ -432,6 +434,7 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
   document.addEventListener('DOMContentLoaded', function() {
     loadUserInfo();
     loadChatHistory();
+    loadTrendingTopics();
   });
 
   // Load current user information
@@ -459,6 +462,131 @@ window.addEventListener('DOMContentLoaded', handleTopbarZoomHide);
       // Keep "Sign In" as default on error
     });
   }
+
+  // Store trending topics data for filtering
+  let trendingTopicsData = [];
+
+  // Load trending topics from database
+  function loadTrendingTopics() {
+    fetch('/api/trending', {
+      method: 'GET',
+      credentials: 'same-origin'
+    })
+    .then(response => response.json())
+    .then(data => {
+      const trendingList = document.getElementById('trendingList');
+      if (!trendingList) return;
+
+      if (data.status === 'success' && data.trending && data.trending.length > 0) {
+        // Store the data for filtering
+        trendingTopicsData = data.trending;
+        
+        // Render trending topics
+        renderTrendingTopics(data.trending);
+      } else {
+        // Show placeholder if no trending topics
+        trendingList.innerHTML = '<li class="placeholder">No trending topics yet.</li>';
+        trendingTopicsData = [];
+      }
+    })
+    .catch(error => {
+      console.error('Error loading trending topics:', error);
+      const trendingList = document.getElementById('trendingList');
+      if (trendingList) {
+        trendingList.innerHTML = '<li class="placeholder">Failed to load trending topics.</li>';
+      }
+      trendingTopicsData = [];
+    });
+  }
+
+  // Render trending topics to the list
+  function renderTrendingTopics(topics) {
+    const trendingList = document.getElementById('trendingList');
+    if (!trendingList) return;
+
+    // Clear existing items
+    trendingList.innerHTML = '';
+    
+    if (!topics || topics.length === 0) {
+      trendingList.innerHTML = '<li class="placeholder">No matching topics.</li>';
+      return;
+    }
+    
+    // Add trending topics
+    topics.forEach(item => {
+      const li = document.createElement('li');
+      li.style.cursor = 'pointer';
+      li.title = `${item.category} (${item.count} search${item.count !== 1 ? 'es' : ''})`;
+      
+      // Category text
+      const categoryText = document.createElement('span');
+      categoryText.textContent = item.category;
+      categoryText.style.flex = '1';
+      categoryText.style.wordBreak = 'break-word';
+      
+      // Count badge
+      const countBadge = document.createElement('span');
+      countBadge.textContent = item.count;
+      countBadge.className = 'trending-count-badge';
+      countBadge.style.marginLeft = '8px';
+      countBadge.style.flexShrink = '0';
+      
+      li.appendChild(categoryText);
+      li.appendChild(countBadge);
+      
+      // Make it clickable to search for that topic
+      li.addEventListener('click', function() {
+        const userInput = document.getElementById('userInput');
+        if (userInput) {
+          userInput.value = item.category;
+          // Trigger input event to resize textarea
+          userInput.dispatchEvent(new Event('input'));
+          // Focus on the input
+          userInput.focus();
+        }
+      });
+      
+      trendingList.appendChild(li);
+    });
+  }
+
+  // Add search functionality for trending topics
+  document.addEventListener('DOMContentLoaded', function() {
+    const trendingSearchInput = document.getElementById('trendingSearchInput');
+    const trendingSearchBtn = trendingSearchInput ? trendingSearchInput.nextElementSibling : null;
+    
+    function filterTrendingTopics() {
+      if (!trendingSearchInput) return;
+      
+      const searchTerm = trendingSearchInput.value.toLowerCase().trim();
+      
+      if (searchTerm === '') {
+        // Show all topics if search is empty
+        renderTrendingTopics(trendingTopicsData);
+        return;
+      }
+      
+      // Filter topics based on search term
+      const filtered = trendingTopicsData.filter(item => 
+        item.category.toLowerCase().includes(searchTerm)
+      );
+      
+      renderTrendingTopics(filtered);
+    }
+    
+    if (trendingSearchInput) {
+      trendingSearchInput.addEventListener('input', filterTrendingTopics);
+      trendingSearchInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          filterTrendingTopics();
+        }
+      });
+    }
+    
+    if (trendingSearchBtn) {
+      trendingSearchBtn.addEventListener('click', filterTrendingTopics);
+    }
+  });
 
   //Accordion Card
   // Accordion helpers that auto-size to content

@@ -935,15 +935,37 @@ transform: translate(-50%, -58%);
   word-break: break-word;
 }
 
+.trending-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .sources-list li:hover,
 .trending-list li:hover {
   background: rgba(255,255,255,0.12);
 }
 
-.sources-list .placeholder {
+.sources-list .placeholder,
+.trending-list .placeholder {
   text-align: center;
   font-style: italic;
   color: var(--muted);
+}
+
+.trending-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1;
 }
 
 .sources-list a {
