@@ -1,351 +1,509 @@
-  // Send Message
-  function sendMessage() {
-    const input = document.getElementById("userInput");
-    const chatBox = document.getElementById("chatBox");
-    const chatInput = document.getElementById("chatInput");
-    const emptyState = document.querySelector('.empty-state');
-  
-    if (input.value.trim() === "") return;
-  
-    const message = input.value.trim();
+// Send Message
+function sendMessage() {
+  const input = document.getElementById("userInput");
+  const chatBox = document.getElementById("chatBox");
+  const chatInput = document.getElementById("chatInput");
 
-    // Hide empty state if it's the first message
-    if (emptyState) {
-      emptyState.style.display = 'none';
+  if (input.value.trim() === "") return;
+
+  const message = input.value.trim();
+  
+  // Move chat input to bottom
+  chatInput.classList.remove("centered");
+  chatInput.classList.add("bottom");
+
+  // Display user message
+  const userMsg = document.createElement("div");
+  userMsg.className = "user-message";
+  userMsg.innerText = message;
+  chatBox.appendChild(userMsg);
+
+  // Clear input
+  input.value = "";
+  input.style.height = "auto";
+
+  // Send to backend
+  fetch('/api/chat/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ message: message })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      if (data.is_first_message) {
+        // First message - trigger scraping
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'bot-message';
+        loadingMsg.textContent = 'Searching and scraping sources…';
+        chatBox.appendChild(loadingMsg);
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({})  // Query is pulled from latest search
+        })
+        .then(res => res.json())
+        .then(scrape => {
+          if (loadingMsg && loadingMsg.parentNode) {
+            loadingMsg.parentNode.removeChild(loadingMsg);
+          }
+          if (scrape && scrape.status === 'success') {
+            // Generate bot response with the result_id
+            generateBotResponses(scrape.result_id, chatBox, true);
+            // Refresh trending topics after a new search
+            loadTrendingTopics();
+          } else {
+            console.error('Scrape failed:', scrape);
+            showNotification('Failed to scrape sources. Please try again.', 'error');
+          }
+        })
+        .catch(err => {
+          if (loadingMsg && loadingMsg.parentNode) {
+            loadingMsg.parentNode.removeChild(loadingMsg);
+          }
+          console.error('Error triggering scrape:', err);
+          showNotification('Error scraping sources. Please try again.', 'error');
+        });
+      } else {
+        // Follow-up message - use chat_id
+        generateBotResponses(data.chat_id, chatBox, false);
+      }
+    } else {
+      console.error('Failed to save message:', data.message);
+      showNotification('Failed to save message. Please try again.', 'error');
+    }
+  })
+  .catch(error => {
+    console.error('Error sending message:', error);
+    showNotification('Error sending message. Please try again.', 'error');
+  });
+}
+
+// Generate bot responses (NEW COMPACT VERSION)
+function generateBotResponses(id, chatBox, isFirstMessage) {
+  // Create one compact container instead of 5 separate ones
+  setTimeout(() => {
+    const botMsg = document.createElement("div");
+    botMsg.className = "bot-message";
+      botMsg.innerHTML = `
+        <div class="accordion-item">
+        <div class="accordion-header">
+          <div class="url-row">
+            <strong>Response</strong>
+            <span class="response-title">${message}</span>
+          </div>
+          <div class="card-right">
+            <button class="icon-btn save-response-btn" type="button" title="Save response"><i class="fa fa-save"></i></button>
+          </div>
+          <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+        </div>
+        <div class="accordion-content">
+          <strong>Summary:</strong>
+          <p class="resp-summary">This is a summary for \"${message}\".</p>
+          <hr>
+          <strong>Analysis</strong>
+          <p class="resp-analysis">According to the summary this is <strong>75% accurate</strong></p>
+          <div class="accuracy-card response-accuracy-card">
+            <div class="accuracy-bar">
+              <span class="true-label"><i class="fa fa-check-circle"></i> <span class="true-percent">75</span>%</span>
+              <div class="bar range-bar">
+                <div class="true" style="width: 75%"></div>
+                <div class="false" style="width: 25%"></div>
+              </div>
+              <span class="false-label"><span class="false-percent">25</span>% <i class="fa fa-exclamation-triangle"></i></span>
+            </div>
+          </div>
+          <hr>
+          <strong>Key findings:</strong>
+          <ul class="resp-keyfindings">
+            <li>3 out of five articles provide accurate information</li>
+            <li>2 out of five articles provide inaccurate information</li>
+          </ul>
+        </div>
+      </div>
+    `;
+    
+    chatBox.appendChild(botMsg);
+    chatBox.scrollTop = chatBox.scrollHeight; // auto scroll
+    const responseTopic = botMsg.querySelector('.resp-title-text')?.textContent || 'analysis';
+    updateSourcesList(buildSourcesForTopic(responseTopic));
+
+    // Enable toggle for this accordion
+    const toggleBtn = botMsg.querySelector(".accordion-toggle");
+    const accordionItem = botMsg.querySelector(".accordion-item");
+    toggleBtn.addEventListener("click", () => {
+      if (accordionItem.classList.contains('open')) {
+        closeAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        openAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'true');
+      }
+    });
+
+    // Wire save button for this bot response
+    const saveBtn = botMsg.querySelector('.save-response-btn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        saveResponseToArchive(botMsg);
+        // mark as saved
+        saveBtn.classList.add('saved');
+        saveBtn.title = 'Saved';
+        showNotification('Saved response to Archive', 'success');
+      });
+    }
+
+    // Update the response in the database
+    const responseText = `Comprehensive analysis of 5 sources completed. Overall credibility: 75%. 3 sources highly credible, 1 mixed, 1 questionable. Consensus: Information is mostly accurate.`;
+    
+    if (isFirstMessage) {
+      console.log('First message saved to searches table');
+    } else {
+      updateChatResponse(id, responseText);
     }
     
-    // Move chat input to bottom
-    chatInput.classList.remove("centered");
-    chatInput.classList.add("bottom");
-  
-    // Display user message
-    const userMsg = document.createElement("div");
-    userMsg.className = "user-message";
-    userMsg.innerText = message;
-    chatBox.appendChild(userMsg);
-  
-    // Clear input
-    input.value = "";
-    input.style.height = "auto";
-  
-    // Send to backend
-    fetch('/api/chat/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({ message: message })
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success') {
-        if (data.is_first_message) {
-          // First message - trigger scraping
-          const loadingMsg = document.createElement('div');
-          loadingMsg.className = 'bot-message';
-          loadingMsg.textContent = 'Searching and scraping sources…';
-          chatBox.appendChild(loadingMsg);
-          chatBox.scrollTop = chatBox.scrollHeight;
-  
-          fetch('/api/scrape', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({})  // Query is pulled from latest search
-          })
-          .then(res => res.json())
-          .then(scrape => {
-            if (loadingMsg && loadingMsg.parentNode) {
-              loadingMsg.parentNode.removeChild(loadingMsg);
-            }
-            if (scrape && scrape.status === 'success') {
-              // Generate bot response with the result_id
-              generateBotResponses(scrape.result_id, chatBox, true);
-            } else {
-              console.error('Scrape failed:', scrape);
-              showNotification('Failed to scrape sources. Please try again.', 'error');
-            }
-          })
-          .catch(err => {
-            if (loadingMsg && loadingMsg.parentNode) {
-              loadingMsg.parentNode.removeChild(loadingMsg);
-            }
-            console.error('Error triggering scrape:', err);
-            showNotification('Error scraping sources. Please try again.', 'error');
-          });
-        } else {
-          // Follow-up message - use chat_id
-          generateBotResponses(data.chat_id, chatBox, false);
-        }
-      } else {
-        console.error('Failed to save message:', data.message);
-        showNotification('Failed to save message. Please try again.', 'error');
-      }
-    })
-    .catch(error => {
-      console.error('Error sending message:', error);
-      showNotification('Error sending message. Please try again.', 'error');
-    });
-  }
+    // Find the accuracy card inside this bot message and initialize scoped update function
+    const accCard = botMsg.querySelector('.response-accuracy-card');
+    if (accCard) {
+      // Example: set to 75/25 as in responseText
+      scopedUpdateAccuracy(accCard, 75, 25);
+    }
+  }, 1000); // Single delay instead of multiple
+}
 
-  // Generate bot responses (NEW COMPACT VERSION)
-  function generateBotResponses(id, chatBox, isFirstMessage) {
-    // Create one compact container instead of 5 separate ones
-    setTimeout(() => {
-      const botMsg = document.createElement("div");
-      botMsg.className = "bot-message";
-        botMsg.innerHTML = `
-          <div class="accordion-item">
-          <div class="accordion-header">
-            <div class="url-row">
-              <strong>Response</strong>
-              <span class="response-title">${message}</span>
-            </div>
-            <div class="card-right">
-              <button class="icon-btn save-response-btn" type="button" title="Save response"><i class="fa fa-save"></i></button>
-            </div>
-            <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
-          </div>
-          <div class="accordion-content">
-            <strong>Summary:</strong>
-            <p class="resp-summary">This is a summary for \"${message}\".</p>
-            <hr>
-            <strong>Analysis</strong>
-            <p class="resp-analysis">According to the summary this is <strong>75% accurate</strong></p>
-            <div class="accuracy-card response-accuracy-card">
-              <div class="accuracy-bar">
-                <span class="true-label"><i class="fa fa-check-circle"></i> <span class="true-percent">75</span>%</span>
-                <div class="bar range-bar">
-                  <div class="true" style="width: 75%"></div>
-                  <div class="false" style="width: 25%"></div>
-                </div>
-                <span class="false-label"><span class="false-percent">25</span>% <i class="fa fa-exclamation-triangle"></i></span>
-              </div>
-            </div>
-            <hr>
-            <strong>Key findings:</strong>
-            <ul class="resp-keyfindings">
-              <li>3 out of five articles provide accurate information</li>
-              <li>2 out of five articles provide inaccurate information</li>
-            </ul>
-          </div>
-        </div>
-      `;
+// Update chat response in database
+function updateChatResponse(chatId, response) {
+  fetch(`/api/chat/update/${chatId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify({ response: response })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status !== 'success') {
+      console.error('Failed to update response:', data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error updating response:', error);
+  });
+}
+
+// Load chat history when page loads
+function loadChatHistory() {
+  fetch('/api/chat/history', {
+    method: 'GET',
+    credentials: 'same-origin'
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success' && data.messages.length > 0) {
+      const chatBox = document.getElementById('chatBox');
+      const chatInput = document.getElementById('chatInput');
       
-      chatBox.appendChild(botMsg);
-      chatBox.scrollTop = chatBox.scrollHeight; // auto scroll
-      const responseTopic = botMsg.querySelector('.resp-title-text')?.textContent || 'analysis';
-      updateSourcesList(buildSourcesForTopic(responseTopic));
-
-      // Enable toggle for this accordion
-      const toggleBtn = botMsg.querySelector(".accordion-toggle");
-      const accordionItem = botMsg.querySelector(".accordion-item");
-      toggleBtn.addEventListener("click", () => {
-        if (accordionItem.classList.contains('open')) {
-          closeAccordion(accordionItem);
-          toggleBtn.setAttribute('aria-expanded', 'false');
-        } else {
-          openAccordion(accordionItem);
-          toggleBtn.setAttribute('aria-expanded', 'true');
+      // Move chat input to bottom if there are messages
+      chatInput.classList.remove("centered");
+      chatInput.classList.add("bottom");
+      
+      // Load each message
+      data.messages.forEach(msg => {
+        // Add user message
+        if (msg.query_text) {
+          const userMsg = document.createElement("div");
+          userMsg.className = "user-message";
+          userMsg.innerText = msg.query_text;
+          chatBox.appendChild(userMsg);
+        }
+        
+        // Add bot response if available (only for chat messages, not search messages)
+        if (msg.response_text && msg.type === 'chat') {
+          const botMsg = document.createElement("div");
+          botMsg.className = "bot-message";
+            botMsg.innerHTML = `
+              <div class="accordion-item">
+                    <div class="accordion-header">
+                      <div class="url-row">
+                        <strong>Response:</strong> 
+                        <span>AI Analysis Complete</span>
+                        <i class="fa fa-check-circle"></i>
+                      </div>
+                      <div class="card-right">
+                        <button class="icon-btn save-response-btn" type="button" title="Save response"><i class="fa fa-save"></i></button>
+                      </div>
+                      <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+                    </div>
+                <div class="accordion-content">
+                  <hr>
+                  <strong>Title:</strong> <span class="resp-title-text">${msg.title || 'earthquake'}</span>
+                  <hr>
+                  <strong>Summary:</strong>
+                  <p class="resp-summary">${msg.response_text}</p>
+                  <hr>
+  
+                  <strong>Analysis</strong>
+                  <p class="resp-analysis">According to the summary this is <strong>75% accurate</strong></p>
+                  <div class="accuracy-card response-accuracy-card">
+                    <div class="accuracy-bar">
+                      <span class="true-label"><i class="fa fa-check-circle"></i> <span class="true-percent">75</span>%</span>
+                      <div class="bar range-bar">
+                        <div class="true" style="width: 75%"></div>
+                        <div class="false" style="width: 25%"></div>
+                      </div>
+                      <span class="false-label"><span class="false-percent">25</span>% <i class="fa fa-exclamation-triangle"></i></span>
+                    </div>
+                  </div>
+                  <hr>
+                  <strong>Key findings:</strong>
+                  <ul class="resp-keyfindings">
+                    <li>3 out of five articles provide accurate information</li>
+                    <li>2 out of five articles provide inaccurate information</li>
+                  </ul>
+                </div>
+              </div>
+            `;
+          chatBox.appendChild(botMsg);
+          
+          // Enable toggle for this accordion
+            const toggleBtn = botMsg.querySelector(".accordion-toggle");
+            const accordionItem = botMsg.querySelector(".accordion-item");
+            toggleBtn.addEventListener("click", () => {
+              if (accordionItem.classList.contains('open')) {
+                closeAccordion(accordionItem);
+                toggleBtn.setAttribute('aria-expanded', 'false');
+              } else {
+                openAccordion(accordionItem);
+                toggleBtn.setAttribute('aria-expanded', 'true');
+              }
+            });
+          // Initialize scoped accuracy for restored message (defaults to 0/0)
+          const restoredAcc = botMsg.querySelector('.response-accuracy-card');
+          if (restoredAcc) {
+            scopedUpdateAccuracy(restoredAcc, 0, 0);
+          }
+          // Wire save button for restored message
+          const restoredSaveBtn = botMsg.querySelector('.save-response-btn');
+          if (restoredSaveBtn) {
+            restoredSaveBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              saveResponseToArchive(botMsg);
+              restoredSaveBtn.classList.add('saved');
+              restoredSaveBtn.title = 'Saved';
+              showNotification('Saved response to Archive', 'success');
+            });
+          }
         }
       });
-
-      // Wire save button for this bot response
-      const saveBtn = botMsg.querySelector('.save-response-btn');
-      if (saveBtn) {
-        saveBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          saveResponseToArchive(botMsg);
-          // mark as saved
-          saveBtn.classList.add('saved');
-          saveBtn.title = 'Saved';
-          showNotification('Saved response to Archive', 'success');
-        });
-      }
-
-      // Update the response in the database
-      const responseText = `Comprehensive analysis of 5 sources completed. Overall credibility: 75%. 3 sources highly credible, 1 mixed, 1 questionable. Consensus: Information is mostly accurate.`;
       
-      if (isFirstMessage) {
-        console.log('First message saved to searches table');
-      } else {
-        updateChatResponse(id, responseText);
-      }
-      
-      // Find the accuracy card inside this bot message and initialize scoped update function
-      const accCard = botMsg.querySelector('.response-accuracy-card');
-      if (accCard) {
-        // Example: set to 75/25 as in responseText
-        scopedUpdateAccuracy(accCard, 75, 25);
-      }
-    }, 1000); // Single delay instead of multiple
-  }
-
-  // Update chat response in database
-  function updateChatResponse(chatId, response) {
-    fetch(`/api/chat/update/${chatId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({ response: response })
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status !== 'success') {
-        console.error('Failed to update response:', data.message);
-      }
-    })
-    .catch(error => {
-      console.error('Error updating response:', error);
-    });
-  }
-
-  // Load chat history when page loads
-  function loadChatHistory() {
-    fetch('/api/chat/history', {
-      method: 'GET',
-      credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success' && data.messages.length > 0) {
-        const chatBox = document.getElementById('chatBox');
-        const chatInput = document.getElementById('chatInput');
-        
-        // Move chat input to bottom if there are messages
-        chatInput.classList.remove("centered");
-        chatInput.classList.add("bottom");
-        
-        // Load each message
-        data.messages.forEach(msg => {
-          // Add user message
-          if (msg.query_text) {
-            const userMsg = document.createElement("div");
-            userMsg.className = "user-message";
-            userMsg.innerText = msg.query_text;
-            chatBox.appendChild(userMsg);
-          }
-          
-          // Add bot response if available (only for chat messages, not search messages)
-          if (msg.response_text && msg.type === 'chat') {
-            const botMsg = document.createElement("div");
-            botMsg.className = "bot-message";
-              botMsg.innerHTML = `
-                <div class="accordion-item">
-                      <div class="accordion-header">
-                        <div class="url-row">
-                          <strong>Response:</strong> 
-                          <span>AI Analysis Complete</span>
-                          <i class="fa fa-check-circle"></i>
-                        </div>
-                        <div class="card-right">
-                          <button class="icon-btn save-response-btn" type="button" title="Save response"><i class="fa fa-save"></i></button>
-                        </div>
-                        <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
-                      </div>
-                  <div class="accordion-content">
-                    <hr>
-                    <strong>Title:</strong> <span class="resp-title-text">${msg.title || 'earthquake'}</span>
-                    <hr>
-                    <strong>Summary:</strong>
-                    <p class="resp-summary">${msg.response_text}</p>
-                    <hr>
-    
-                    <strong>Analysis</strong>
-                    <p class="resp-analysis">According to the summary this is <strong>75% accurate</strong></p>
-                    <div class="accuracy-card response-accuracy-card">
-                      <div class="accuracy-bar">
-                        <span class="true-label"><i class="fa fa-check-circle"></i> <span class="true-percent">75</span>%</span>
-                        <div class="bar range-bar">
-                          <div class="true" style="width: 75%"></div>
-                          <div class="false" style="width: 25%"></div>
-                        </div>
-                        <span class="false-label"><span class="false-percent">25</span>% <i class="fa fa-exclamation-triangle"></i></span>
-                      </div>
-                    </div>
-                    <hr>
-                    <strong>Key findings:</strong>
-                    <ul class="resp-keyfindings">
-                      <li>3 out of five articles provide accurate information</li>
-                      <li>2 out of five articles provide inaccurate information</li>
-                    </ul>
-                  </div>
-                </div>
-              `;
-            chatBox.appendChild(botMsg);
-            
-            // Enable toggle for this accordion
-              const toggleBtn = botMsg.querySelector(".accordion-toggle");
-              const accordionItem = botMsg.querySelector(".accordion-item");
-              toggleBtn.addEventListener("click", () => {
-                if (accordionItem.classList.contains('open')) {
-                  closeAccordion(accordionItem);
-                  toggleBtn.setAttribute('aria-expanded', 'false');
-                } else {
-                  openAccordion(accordionItem);
-                  toggleBtn.setAttribute('aria-expanded', 'true');
-                }
-              });
-            // Initialize scoped accuracy for restored message (defaults to 0/0)
-            const restoredAcc = botMsg.querySelector('.response-accuracy-card');
-            if (restoredAcc) {
-              scopedUpdateAccuracy(restoredAcc, 0, 0);
-            }
-            // Wire save button for restored message
-            const restoredSaveBtn = botMsg.querySelector('.save-response-btn');
-            if (restoredSaveBtn) {
-              restoredSaveBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                saveResponseToArchive(botMsg);
-                restoredSaveBtn.classList.add('saved');
-                restoredSaveBtn.title = 'Saved';
-                showNotification('Saved response to Archive', 'success');
-              });
-            }
-          }
-        });
-        
-        // Scroll to bottom
-        chatBox.scrollTop = chatBox.scrollHeight;
-      }
-    })
-    .catch(error => {
-      console.error('Error loading chat history:', error);
-    });
-  }
-
-  // Load user information and chat history when page loads
-  document.addEventListener('DOMContentLoaded', function() {
-    loadUserInfo();
-    loadChatHistory();
+      // Scroll to bottom
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+  })
+  .catch(error => {
+    console.error('Error loading chat history:', error);
   });
+}
 
-  // Load current user information
-  function loadUserInfo() {
-    fetch('/api/user', {
-      method: 'GET',
-      credentials: 'same-origin'
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status === 'success' && data.user) {
-        // Update the username display
-        const userDisplayName = document.getElementById('userDisplayName');
-        if (userDisplayName) {
-          userDisplayName.textContent = data.user.username;
-        }
-      } else {
-        // User not logged in or error occurred
-        console.log('User not logged in or error:', data.message);
-        // Keep "Sign In" as default
+// Load user information and chat history when page loads
+document.addEventListener('DOMContentLoaded', function() {
+  loadUserInfo();
+  loadChatHistory();
+  loadTrendingTopics();
+});
+
+// Load current user information
+function loadUserInfo() {
+  fetch('/api/user', {
+    method: 'GET',
+    credentials: 'same-origin'
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success' && data.user) {
+      // Update the username display
+      const userDisplayName = document.getElementById('userDisplayName');
+      if (userDisplayName) {
+        userDisplayName.textContent = data.user.username;
       }
-    })
-    .catch(error => {
-      console.error('Error loading user info:', error);
-      // Keep "Sign In" as default on error
+    } else {
+      // User not logged in or error occurred
+      console.log('User not logged in or error:', data.message);
+      // Keep "Sign In" as default
+    }
+  })
+  .catch(error => {
+    console.error('Error loading user info:', error);
+    // Keep "Sign In" as default on error
+  });
+}
+
+// Store trending topics data for filtering
+let trendingTopicsData = [];
+
+// Load trending topics from database
+function loadTrendingTopics() {
+  fetch('/api/trending', {
+    method: 'GET',
+    credentials: 'same-origin'
+  })
+  .then(response => response.json())
+  .then(data => {
+    const trendingList = document.getElementById('trendingList');
+    if (!trendingList) return;
+
+    if (data.status === 'success' && data.trending && data.trending.length > 0) {
+      // Store the data for filtering
+      trendingTopicsData = data.trending;
+      
+      // Render trending topics
+      renderTrendingTopics(data.trending);
+    } else {
+      // Show placeholder if no trending topics
+      trendingList.innerHTML = '<li class="placeholder">No trending topics yet.</li>';
+      trendingTopicsData = [];
+    }
+  })
+  .catch(error => {
+    console.error('Error loading trending topics:', error);
+    const trendingList = document.getElementById('trendingList');
+    if (trendingList) {
+      trendingList.innerHTML = '<li class="placeholder">Failed to load trending topics.</li>';
+    }
+    trendingTopicsData = [];
+  });
+}
+
+// Render trending topics to the list
+function renderTrendingTopics(topics) {
+  const trendingList = document.getElementById('trendingList');
+  if (!trendingList) return;
+
+  // Clear existing items
+  trendingList.innerHTML = '';
+  
+  if (!topics || topics.length === 0) {
+    trendingList.innerHTML = '<li class="placeholder">No matching topics.</li>';
+    return;
+  }
+  
+  // Add trending topics
+  topics.forEach(item => {
+    const li = document.createElement('li');
+    li.style.cursor = 'pointer';
+    li.title = `${item.category} (${item.count} search${item.count !== 1 ? 'es' : ''})`;
+    
+    // Category text
+    const categoryText = document.createElement('span');
+    categoryText.textContent = item.category;
+    categoryText.style.flex = '1';
+    categoryText.style.wordBreak = 'break-word';
+    
+    // Count badge
+    const countBadge = document.createElement('span');
+    countBadge.textContent = item.count;
+    countBadge.className = 'trending-count-badge';
+    countBadge.style.marginLeft = '8px';
+    countBadge.style.flexShrink = '0';
+    
+    li.appendChild(categoryText);
+    li.appendChild(countBadge);
+    
+    // Make it clickable to search for that topic
+    li.addEventListener('click', function() {
+      const userInput = document.getElementById('userInput');
+      if (userInput) {
+        userInput.value = item.category;
+        // Trigger input event to resize textarea
+        userInput.dispatchEvent(new Event('input'));
+        // Focus on the input
+        userInput.focus();
+      }
+    });
+    
+    trendingList.appendChild(li);
+  });
+}
+
+// Add search functionality for trending topics
+document.addEventListener('DOMContentLoaded', function() {
+  const trendingSearchInput = document.getElementById('trendingSearchInput');
+  const trendingSearchBtn = trendingSearchInput ? trendingSearchInput.nextElementSibling : null;
+  
+  function filterTrendingTopics() {
+    if (!trendingSearchInput) return;
+    
+    const searchTerm = trendingSearchInput.value.toLowerCase().trim();
+    
+    if (searchTerm === '') {
+      // Show all topics if search is empty
+      renderTrendingTopics(trendingTopicsData);
+      return;
+    }
+    
+    // Filter topics based on search term
+    const filtered = trendingTopicsData.filter(item => 
+      item.category.toLowerCase().includes(searchTerm)
+    );
+    
+    renderTrendingTopics(filtered);
+  }
+  
+  if (trendingSearchInput) {
+    trendingSearchInput.addEventListener('input', filterTrendingTopics);
+    trendingSearchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        filterTrendingTopics();
+      }
     });
   }
+  
+  if (trendingSearchBtn) {
+    trendingSearchBtn.addEventListener('click', filterTrendingTopics);
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   //Accordion Card
   // Accordion helpers that auto-size to content
@@ -404,6 +562,31 @@
   })();
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
 
     // Generate bot responses by fetching real data from backend
   function generateBotResponses(id, chatBox, isFirstMessage) {
