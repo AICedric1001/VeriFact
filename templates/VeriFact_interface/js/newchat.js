@@ -4,374 +4,367 @@ function escapeHtml(str = '') {
   return div.innerHTML;
 }
 
+// Enhanced ChatManager - Replace the existing ChatManager class in newchat.js
+
 class ChatManager {
   constructor() {
-    this.chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-    this.currentChatId = null;
-    this.chats = JSON.parse(localStorage.getItem('chats') || '{}');
-    this.selectedChats = new Set();
+    this.conversations = {}; // Store by search_id
+    this.currentConversationId = null;
+    this.selectedConversations = new Set();
   }
 
-  // Ingest server-provided conversation history into local state
-  hydrateFromServerHistory(messages = []) {
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return;
-    }
-
-    // Remove previously hydrated server entries to avoid duplicates
-    Object.keys(this.chats).forEach(chatId => {
-      if (this.chats[chatId]?.source === 'server') {
-        delete this.chats[chatId];
-      }
-    });
-
-    const imported = {};
-
-    messages.forEach(msg => {
-      const id = msg?.id;
-      const type = msg?.type;
-
-      // Skip search rows for now; sidebar should show stored conversations only
-      if (type !== 'chat') {
-        return;
-      }
-
-      const query = (msg?.query_text || '').trim();
-      const response = (msg?.response_text || '').trim();
-      const timestamp = msg?.timestamp || new Date().toISOString();
-
-      if (!id || !type || !query) {
-        return;
-      }
-
-      const chatId = `${type}-${id}`;
-      if (imported[chatId]) {
-        return;
-      }
-
-      const messageList = [{ role: 'user', content: query, html: null }];
-
-      if (type === 'chat' && response) {
-        messageList.push({
-          role: 'bot',
-          content: response,
-          html: this.buildBotHistoryHtml(response, msg?.title || query)
+  // Load conversations from server
+  async loadFromServer() {
+    try {
+      const response = await fetch('/api/chat/history', {
+        method: 'GET',
+        credentials: 'same-origin'
+      });
+      
+      const data = await response.json();
+      
+      if (data.status === 'success' && data.conversations) {
+        // Clear existing conversations
+        this.conversations = {};
+        
+        // Store each conversation
+        data.conversations.forEach(conv => {
+          this.conversations[conv.search_id] = conv;
         });
+        
+        // Render sidebar
+        this.renderChatHistory();
+        
+        // If we have conversations and none is currently active, load the most recent
+        if (Object.keys(this.conversations).length > 0 && !this.currentConversationId) {
+          const firstConvId = Object.keys(this.conversations)[0];
+          this.loadConversation(firstConvId);
+        }
       }
-
-      imported[chatId] = {
-        id: chatId,
-        title: this.getChatTitle(messageList),
-        messages: messageList,
-        timestamp,
-        source: 'server'
-      };
-    });
-
-    if (Object.keys(imported).length === 0) {
-      return;
+    } catch (error) {
+      console.error('Error loading conversations from server:', error);
     }
-
-    this.chats = { ...imported, ...this.chats };
-    this.saveToLocalStorage();
-    this.renderChatHistory();
   }
 
-  buildBotHistoryHtml(summaryText = '', topic = 'AI Analysis') {
-    const safeSummary = escapeHtml(summaryText || 'Summary unavailable.');
-    const safeTopic = escapeHtml(topic || 'Analysis');
-
-    return `
-      <div class="accordion-item">
-        <div class="accordion-header">
-          <div class="url-row">
-            <strong>Response</strong>
-            <span class="resp-title-text">${safeTopic}</span>
-          </div>
-          <div class="card-right">
-            <button class="icon-btn save-response-btn" type="button" title="Save response">
-              <i class="fa fa-save"></i>
-            </button>
-          </div>
-          <button class="accordion-toggle" aria-expanded="false">
-            <i class="fa fa-angle-double-down"></i>
-          </button>
-        </div>
-        <div class="accordion-content">
-          <strong>Summary:</strong>
-          <p class="resp-summary">${safeSummary}</p>
-        </div>
-      </div>
-    `;
-  }
-
-  // Derive a lightweight title for the sidebar card
-  getChatTitle(messages) {
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return 'Untitled chat';
+  // Start a new chat
+  async newChat() {
+    // Save current conversation if it exists and has messages
+    if (this.currentConversationId) {
+      await this.saveCurrentConversation();
     }
 
-    const firstUserMessage = messages.find(msg => msg.role === 'user');
-    const basis = (firstUserMessage ? firstUserMessage.content : messages[0].content || '').trim();
-
-    if (!basis) {
-      return 'Untitled chat';
+    // Clear the chat box
+    const chatBox = document.getElementById('chatBox');
+    if (chatBox) {
+      chatBox.innerHTML = '';
     }
 
-    return basis.length > 60 ? basis.slice(0, 57).trim() + '...' : basis;
+    // Show empty state
+    const emptyState = document.querySelector('.empty-state');
+    if (emptyState) {
+      emptyState.style.display = 'flex';
+    }
+
+    // Clear sources
+    const sourcesList = document.getElementById('sourcesList');
+    if (sourcesList) {
+      sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
+    }
+
+    // Reset to null (will be set when first message is sent)
+    this.currentConversationId = null;
+
+    // Reset chat input to centered
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+      chatInput.classList.remove('bottom');
+      chatInput.classList.add('centered');
+      
+      // Clear and focus input
+      const textarea = chatInput.querySelector('textarea');
+      if (textarea) {
+        textarea.value = '';
+        textarea.focus();
+      }
+    }
+
+    // Update active state in sidebar
+    this.updateActiveConversation();
   }
 
-  // Save the current chat to history
-  saveCurrentChat() {
-    if (!this.currentChatId) return;
+  // Save current conversation (called before switching or creating new)
+  async saveCurrentConversation() {
+    if (!this.currentConversationId) return;
 
     const chatBox = document.getElementById('chatBox');
     if (!chatBox) return;
 
-    const messages = Array.from(chatBox.children).map(el => {
-      const role = el.classList.contains('user-message') ? 'user' : 'bot';
-      return {
-        role,
-        content: el.innerText,
-        html: el.innerHTML
-      };
-    });
+    // Extract messages from current chat box
+    const messages = Array.from(chatBox.children)
+      .filter(el => el.classList.contains('user-message') || el.classList.contains('bot-message'))
+      .map(el => ({
+        role: el.classList.contains('user-message') ? 'user' : 'bot',
+        content: el.innerText || ''
+      }));
 
     if (messages.length === 0) return;
 
-    const serverPayload = messages.map(({ role, content }) => ({ role, content }));
-    const chatTitle = this.getChatTitle(messages);
-
-    fetch('/api/chat/save_history', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        chatId: this.currentChatId,
-        title: chatTitle,
-        messages: serverPayload
-      })
-    })
-      .then(response => {
-        if (!response.ok) {
-          console.error('Failed to save history to server.');
-        }
-      })
-      .catch(error => {
-        console.error('Network error saving history:', error);
+    // Send to backend
+    try {
+      await fetch('/api/chat/save_history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          search_id: this.currentConversationId,
+          messages: messages
+        })
       });
-
-    // Update or add chat
-    this.chats[this.currentChatId] = {
-      id: this.currentChatId,
-      title: chatTitle,
-      messages,
-      timestamp: new Date().toISOString(),
-      source: this.chats[this.currentChatId]?.source || 'local'
-    };
-
-    this.saveToLocalStorage();
-    this.renderChatHistory();
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+    }
   }
 
-  // Start a new chat
-newChat() {
-  // Check if there are any messages in the current chat
-  const chatBox = document.getElementById('chatBox');
-  const hasMessages = chatBox && Array.from(chatBox.children).some(el => 
-    el.classList.contains('user-message') || 
-    el.classList.contains('bot-message')
-  );
+  // Load a conversation from history
+  loadConversation(searchId) {
+    const conversation = this.conversations[searchId];
+    if (!conversation) return;
 
-  if (hasMessages) {
-    // Save the current chat before starting a new one
-    this.saveCurrentChat();
-  }
+    this.currentConversationId = searchId;
 
-  // Clear the chat box
-  if (chatBox) {
-    chatBox.innerHTML = '';
-  }
-
-  // Clear sources
-  const sourcesList = document.getElementById('sourcesList');
-  if (sourcesList) {
-    sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
-  }
-
-  // Save the current chat ID before generating a new one
-  const previousChatId = this.currentChatId;
-  
-  // Generate new chat ID
-  this.currentChatId = 'chat-' + Date.now();
-
-  // Reset chat input
-  const chatInput = document.getElementById('chatInput');
-  if (chatInput) {
-    chatInput.classList.remove('bottom');
-    chatInput.classList.add('centered');
-    chatInput.focus();
-  }
-
-  // Clear any selected chats
-  this.selectedChats.clear();
-
-  // Always save and render to ensure the chat history is updated
-  this.saveToLocalStorage();
-  this.renderChatHistory();
-
-  // Scroll to top of chat
-  if (chatBox) {
-    chatBox.scrollTop = 0;
-  }
-
-  return this.currentChatId;
-}
-
-
-  // Load a chat from history
-  loadChat(chatId) {
-    const chat = this.chats[chatId];
-    if (!chat) return;
-
-    this.saveCurrentChat();
-    this.currentChatId = chatId;
-
-    // Clear and repopulate chat
     const chatBox = document.getElementById('chatBox');
-    if (chatBox) {
-      chatBox.innerHTML = '';
-      chat.messages.forEach(msg => {
-        const msgEl = document.createElement('div');
-        msgEl.className = msg.role + '-message';
+    if (!chatBox) return;
 
-        if (msg.role === 'bot' && msg.html) {
-          msgEl.innerHTML = msg.html;
-          this.initializeBotMessageInteractions(msgEl);
-        } else {
-          msgEl.textContent = msg.content;
-        }
-
-        chatBox.appendChild(msgEl);
-      });
-      chatBox.scrollTop = chatBox.scrollHeight;
+    // Hide empty state
+    const emptyState = document.querySelector('.empty-state');
+    if (emptyState) {
+      emptyState.style.display = 'none';
     }
 
-    this.updateActiveChat();
-  }
+    // Clear chat box
+    chatBox.innerHTML = '';
 
-  // Delete a chat (kept for backward compatibility, but not used in UI anymore)
-  deleteChat(chatId, event) {
-    if (event) event.stopPropagation();
-    
-    if (confirm('Are you sure you want to delete this chat?')) {
-      delete this.chats[chatId];
-      this.selectedChats.delete(chatId);
-      if (this.currentChatId === chatId) {
-        this.currentChatId = null;
+    // Rebuild messages
+    conversation.messages.forEach(msg => {
+      if (msg.role === 'user') {
+        // User message
+        const userMsg = document.createElement('div');
+        userMsg.className = 'user-message';
+        userMsg.textContent = msg.content;
+        chatBox.appendChild(userMsg);
+      } else {
+        // Bot message with full UI reconstruction
+        const botMsg = this.buildBotMessage(msg);
+        chatBox.appendChild(botMsg);
       }
-      this.saveToLocalStorage();
-      this.renderChatHistory();
-      
-      // If we deleted the current chat, start a new one
-      if (this.currentChatId === chatId) {
-        this.newChat();
-      }
+    });
+
+    // Update sources panel if we have sources from the first bot message
+    const firstBotMsg = conversation.messages.find(m => m.role === 'bot');
+    if (firstBotMsg && firstBotMsg.sources) {
+      updateSourcesList(firstBotMsg.sources);
     }
+
+    // Move chat input to bottom
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+      chatInput.classList.remove('centered');
+      chatInput.classList.add('bottom');
+    }
+
+    // Scroll to bottom
+    chatBox.scrollTop = chatBox.scrollHeight;
+
+    // Update active state
+    this.updateActiveConversation();
   }
 
-  // Render chat history in sidebar with checkboxes
-renderChatHistory() {
-  const historyContainer = document.querySelector('.chat-history');
-  if (!historyContainer) return;
+  // Build bot message with full UI (summary, sources, accuracy)
+  buildBotMessage(messageData) {
+    const botMsg = document.createElement('div');
+    botMsg.className = 'bot-message';
 
-  // Sort chats by timestamp (newest first)
-  const sortedChats = Object.values(this.chats)
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Determine if this is a rich message (has summary + sources) or simple follow-up
+    const isRichMessage = messageData.summary && messageData.sources;
 
-  // Generate chat items with checkboxes
-  const chatItemsHtml = sortedChats.map(chat => `
-    <div class="chat-history-item ${this.currentChatId === chat.id ? 'active' : ''}" 
-         data-chat-id="${chat.id}">
-      <div class="card-left">
-        <i class="fa fa-comment"></i>
-        <span class="chat-title">${chat.title}</span>
-      </div>
-      <div class="card-right">
-        <label class="checkbox" aria-label="Select">
-          <input type="checkbox" class="chat-checkbox-input" value="${chat.id}" 
-                 ${this.selectedChats.has(chat.id) ? 'checked' : ''}>
-          <span></span>
-        </label>
-      </div>
-    </div>
-  `).join('');
-
-  // Update the sidebar header if it doesn't exist
-  const sidebarHeader = document.querySelector('.sidebar .sidebar-header');
-  if (!sidebarHeader) {
-    const sidebar = document.querySelector('.sidebar');
-    const headerHtml = `
-      <div class="sidebar-header">
-        <div class="title">
-          <span class="title-icon" aria-hidden="true"><i class="fa fa-history"></i></span>
-          <span>HISTORY</span>
-        </div>
-        <div class="actions">
-          <button class="icon-btn" id="sidebarNewChatBtn" aria-label="New Chat">
-            <i class="fa fa-pen-to-square"></i>
-          </button>
-          <div class="search-box">
-            <input type="text" placeholder="Search..." />
-            <button><i class="fas fa-search"></i></button>
+    if (isRichMessage) {
+      // Rich message with accordion, summary, accuracy, sources
+      botMsg.innerHTML = `
+        <div class="accordion-item">
+          <div class="accordion-header">
+            <div class="url-row">
+              <strong>Response</strong>
+              <span class="response-title">${escapeHtml(messageData.summary.substring(0, 50) + '...')}</span>
+            </div>
+            <div class="card-right">
+              <button class="icon-btn save-response-btn" type="button" title="Save response">
+                <i class="fa fa-save"></i>
+              </button>
+            </div>
+            <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
           </div>
-          <button class="icon-btn" id="deleteSelectedChats" aria-label="Delete All">
-            <i class="fa fa-trash"></i>
-          </button>
-          <label class="checkbox" aria-label="Select All">
-            <input type="checkbox" id="select-all-chats" ${sortedChats.length === 0 ? 'disabled' : ''}>
+          <div class="accordion-content">
+            <div class="response-section">
+              <strong>Summary:</strong>
+              <p class="resp-summary">${escapeHtml(messageData.summary)}</p>
+              <hr>
+              <strong>Analysis</strong>
+              <p class="resp-analysis">According to the analysis, this information is <strong>${messageData.accuracy.true_percent}% credible</strong> based on source reliability.</p>
+
+              <!-- Accuracy Card -->
+              <div class="accuracy-card response-accuracy-card">
+                <div class="accuracy-bar">
+                  <span class="true-label">
+                    <i class="fa fa-check-circle"></i> 
+                    <span class="true-percent">${messageData.accuracy.true_percent}</span>%
+                  </span>
+                  <div class="bar range-bar">
+                    <div class="true" style="width: ${messageData.accuracy.true_percent}%"></div>
+                    <div class="false" style="width: ${messageData.accuracy.false_percent}%"></div>
+                  </div>
+                  <span class="false-label">
+                    <span class="false-percent">${messageData.accuracy.false_percent}</span>% 
+                    <i class="fa fa-exclamation-triangle"></i>
+                  </span>
+                </div>
+              </div>
+
+              <hr>
+              <strong>Key Findings:</strong>
+              <ul class="resp-keyfindings">
+                <li>${messageData.accuracy.trusted_count} out of ${messageData.accuracy.total_count} sources are from verified outlets</li>
+                <li>${messageData.accuracy.total_count - messageData.accuracy.trusted_count} unverified source${messageData.accuracy.total_count - messageData.accuracy.trusted_count !== 1 ? 's' : ''}</li>
+                ${messageData.accuracy.true_percent >= 80 ? '<li style="color:#4caf50;">High confidence in information accuracy</li>' : ''}
+                ${messageData.accuracy.true_percent < 50 ? '<li style="color:#e53935;">⚠️ Exercise caution - limited verified sources</li>' : ''}
+              </ul>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Wire up accordion toggle
+      const toggleBtn = botMsg.querySelector('.accordion-toggle');
+      const accordionItem = botMsg.querySelector('.accordion-item');
+      if (toggleBtn && accordionItem) {
+        toggleBtn.addEventListener('click', () => {
+          if (accordionItem.classList.contains('open')) {
+            closeAccordion(accordionItem);
+            toggleBtn.setAttribute('aria-expanded', 'false');
+          } else {
+            openAccordion(accordionItem);
+            toggleBtn.setAttribute('aria-expanded', 'true');
+          }
+        });
+      }
+
+      // Wire up save button
+      const saveBtn = botMsg.querySelector('.save-response-btn');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (typeof saveResponseToArchive === 'function') {
+            saveResponseToArchive(botMsg);
+          }
+          saveBtn.classList.add('saved');
+          saveBtn.title = 'Saved';
+          if (typeof showNotification === 'function') {
+            showNotification('Saved response to Archive', 'success');
+          }
+        });
+      }
+    } else {
+      // Simple follow-up message (no sources/accuracy)
+      botMsg.innerHTML = `
+        <div class="accordion-item">
+          <div class="accordion-header">
+            <div class="url-row">
+              <strong>Response</strong>
+            </div>
+            <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+          </div>
+          <div class="accordion-content">
+            <p>${escapeHtml(messageData.content)}</p>
+          </div>
+        </div>
+      `;
+
+      // Wire up accordion for simple messages too
+      const toggleBtn = botMsg.querySelector('.accordion-toggle');
+      const accordionItem = botMsg.querySelector('.accordion-item');
+      if (toggleBtn && accordionItem) {
+        toggleBtn.addEventListener('click', () => {
+          if (accordionItem.classList.contains('open')) {
+            closeAccordion(accordionItem);
+            toggleBtn.setAttribute('aria-expanded', 'false');
+          } else {
+            openAccordion(accordionItem);
+            toggleBtn.setAttribute('aria-expanded', 'true');
+          }
+        });
+      }
+    }
+
+    return botMsg;
+  }
+
+  // Render chat history in sidebar
+  renderChatHistory() {
+    const historyContainer = document.querySelector('.chat-history');
+    if (!historyContainer) return;
+
+    // Sort conversations by timestamp (newest first)
+    const sortedConversations = Object.values(this.conversations)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    if (sortedConversations.length === 0) {
+      historyContainer.innerHTML = '<div class="no-chats">No chat history</div>';
+      return;
+    }
+
+    // Generate chat items
+    const chatItemsHtml = sortedConversations.map(conv => `
+      <div class="chat-history-item ${this.currentConversationId === conv.search_id ? 'active' : ''}" 
+           data-conversation-id="${conv.search_id}">
+        <div class="card-left">
+          <i class="fa fa-comment"></i>
+          <span class="chat-title">${conv.title}</span>
+        </div>
+        <div class="card-right">
+          <label class="checkbox" aria-label="Select">
+            <input type="checkbox" class="chat-checkbox-input" value="${conv.search_id}" 
+                   ${this.selectedConversations.has(conv.search_id) ? 'checked' : ''}>
             <span></span>
           </label>
         </div>
       </div>
-    `;
-    sidebar.insertAdjacentHTML('afterbegin', headerHtml);
+    `).join('');
+
+    historyContainer.innerHTML = chatItemsHtml;
+
+    // Attach event listeners
+    this.attachHistoryItemListeners();
+    this.attachCheckboxListeners();
   }
 
-  const sidebarNewChatBtn = document.getElementById('sidebarNewChatBtn');
-  if (sidebarNewChatBtn && !sidebarNewChatBtn.dataset.bound) {
-    sidebarNewChatBtn.addEventListener('click', () => this.newChat());
-    sidebarNewChatBtn.dataset.bound = 'true';
-  }
-
-  // Update the chat history content
-  historyContainer.innerHTML = sortedChats.length > 0 ? chatItemsHtml : '<div class="no-chats">No chat history</div>';
-  
-  // Add event listeners
-  this.attachCheckboxListeners();
-  this.attachHistoryItemListeners();
-}
-
-  // Update active chat styling
-  updateActiveChat() {
+  // Attach click handlers to history items
+  attachHistoryItemListeners() {
     document.querySelectorAll('.chat-history-item').forEach(item => {
-      item.classList.toggle(
-        'active', 
-        item.getAttribute('data-chat-id') === this.currentChatId
-      );
+      item.addEventListener('click', (event) => {
+        // Don't trigger if clicking checkbox
+        if (event.target.closest('.chat-checkbox-input')) {
+          return;
+        }
+
+        const conversationId = item.getAttribute('data-conversation-id');
+        if (conversationId) {
+          this.loadConversation(parseInt(conversationId));
+        }
+      });
     });
   }
 
-  // Save data to localStorage
-  saveToLocalStorage() {
-    localStorage.setItem('chats', JSON.stringify(this.chats));
-  }
-
-  // Attach event listeners to checkboxes
+  // Attach checkbox event listeners
   attachCheckboxListeners() {
-    // Select All checkbox
     const selectAllCheckbox = document.getElementById('select-all-chats');
     const chatCheckboxes = document.querySelectorAll('.chat-checkbox-input');
     const deleteSelectedBtn = document.getElementById('deleteSelectedChats');
@@ -382,28 +375,33 @@ renderChatHistory() {
         const isChecked = e.target.checked;
         chatCheckboxes.forEach(checkbox => {
           checkbox.checked = isChecked;
+          const convId = parseInt(checkbox.value);
           if (isChecked) {
-            this.selectedChats.add(checkbox.value);
+            this.selectedConversations.add(convId);
           } else {
-            this.selectedChats.delete(checkbox.value);
+            this.selectedConversations.delete(convId);
           }
         });
-        deleteSelectedBtn.disabled = !isChecked;
+        if (deleteSelectedBtn) {
+          deleteSelectedBtn.disabled = !isChecked;
+        }
       });
     }
 
     // Individual checkbox functionality
     chatCheckboxes.forEach(checkbox => {
       checkbox.addEventListener('change', (e) => {
-        const chatId = e.target.value;
+        const convId = parseInt(e.target.value);
         if (e.target.checked) {
-          this.selectedChats.add(chatId);
+          this.selectedConversations.add(convId);
         } else {
-          this.selectedChats.delete(chatId);
+          this.selectedConversations.delete(convId);
         }
         
         // Update delete button state
-        deleteSelectedBtn.disabled = this.selectedChats.size === 0;
+        if (deleteSelectedBtn) {
+          deleteSelectedBtn.disabled = this.selectedConversations.size === 0;
+        }
         
         // Update select all checkbox
         if (selectAllCheckbox) {
@@ -416,85 +414,50 @@ renderChatHistory() {
 
     // Delete selected functionality
     if (deleteSelectedBtn) {
-      deleteSelectedBtn.addEventListener('click', () => {
-        if (this.selectedChats.size > 0 && 
-            confirm(`Are you sure you want to delete ${this.selectedChats.size} selected chat(s)?`)) {
-          
-          const wasCurrentChatDeleted = Array.from(this.selectedChats).some(id => id === this.currentChatId);
-          
-          // Delete all selected chats
-          this.selectedChats.forEach(chatId => {
-            delete this.chats[chatId];
-          });
-          
-          this.selectedChats.clear();
-          this.saveToLocalStorage();
-          
-          if (wasCurrentChatDeleted) {
-            this.currentChatId = null;
-            this.newChat();
-          } else {
+      deleteSelectedBtn.addEventListener('click', async () => {
+        if (this.selectedConversations.size === 0) return;
+
+        if (confirm(`Delete ${this.selectedConversations.size} selected conversation(s)?`)) {
+          // Delete from server
+          try {
+            for (const convId of this.selectedConversations) {
+              await fetch(`/api/chat/delete/${convId}`, {
+                method: 'DELETE',
+                credentials: 'same-origin'
+              });
+              
+              // Remove from local state
+              delete this.conversations[convId];
+            }
+
+            // Check if current conversation was deleted
+            if (this.selectedConversations.has(this.currentConversationId)) {
+              this.newChat();
+            }
+
+            this.selectedConversations.clear();
             this.renderChatHistory();
+            
+            if (typeof showNotification === 'function') {
+              showNotification('Conversations deleted successfully', 'success');
+            }
+          } catch (error) {
+            console.error('Error deleting conversations:', error);
+            if (typeof showNotification === 'function') {
+              showNotification('Failed to delete conversations', 'error');
+            }
           }
         }
       });
     }
   }
 
-  // Attach click handlers to load chats when history items are clicked
-  attachHistoryItemListeners() {
+  // Update active conversation styling
+  updateActiveConversation() {
     document.querySelectorAll('.chat-history-item').forEach(item => {
-      if (item.dataset.bound === 'true') {
-        return;
-      }
-
-      item.addEventListener('click', (event) => {
-        const interactedCheckbox = event.target.closest('.chat-checkbox-input');
-        if (interactedCheckbox) {
-          return;
-        }
-
-        const chatId = item.getAttribute('data-chat-id');
-        if (chatId) {
-          this.loadChat(chatId);
-        }
-      });
-
-      item.dataset.bound = 'true';
+      const convId = parseInt(item.getAttribute('data-conversation-id'));
+      item.classList.toggle('active', convId === this.currentConversationId);
     });
-  }
-
-  initializeBotMessageInteractions(botMsg) {
-    if (!botMsg) return;
-
-    const toggleBtn = botMsg.querySelector(".accordion-toggle");
-    const accordionItem = botMsg.querySelector(".accordion-item");
-    if (toggleBtn && accordionItem) {
-      toggleBtn.addEventListener("click", () => {
-        if (accordionItem.classList.contains('open')) {
-          closeAccordion(accordionItem);
-          toggleBtn.setAttribute('aria-expanded', 'false');
-        } else {
-          openAccordion(accordionItem);
-          toggleBtn.setAttribute('aria-expanded', 'true');
-        }
-      });
-    }
-
-    const saveBtn = botMsg.querySelector('.save-response-btn');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (typeof saveResponseToArchive === 'function') {
-          saveResponseToArchive(botMsg);
-        }
-        saveBtn.classList.add('saved');
-        saveBtn.title = 'Saved';
-        if (typeof showNotification === 'function') {
-          showNotification('Saved response to Archive', 'success');
-        }
-      });
-    }
   }
 }
 
@@ -502,18 +465,33 @@ renderChatHistory() {
 const chatManager = new ChatManager();
 window.chatManager = chatManager;
 
+// Helper function
+function escapeHtml(text = '') {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-  // Initialize new chat if none exists
-  if (!chatManager.currentChatId) {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Load conversations from server
+  await chatManager.loadFromServer();
+
+  // If no conversations exist, start a new chat
+  if (Object.keys(chatManager.conversations).length === 0) {
     chatManager.newChat();
-  } else {
-    chatManager.renderChatHistory();
   }
-  // Update New Chat button
+
+  // Wire up New Chat button
   const newChatBtn = document.querySelector('button[aria-label="New Chat"]');
   if (newChatBtn) {
     newChatBtn.addEventListener('click', () => chatManager.newChat());
+  }
+
+  // Wire up sidebar New Chat button
+  const sidebarNewChatBtn = document.getElementById('sidebarNewChatBtn');
+  if (sidebarNewChatBtn) {
+    sidebarNewChatBtn.addEventListener('click', () => chatManager.newChat());
   }
 });
 

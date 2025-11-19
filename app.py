@@ -686,88 +686,152 @@ def send_chat_message():
     except Exception as e:
         print("❌ Send chat message error:", e)
         return jsonify({'status': 'error', 'message': 'Failed to save message'}), 500
+    
+# Add this enhanced endpoint to app.py, replacing the existing /api/chat/history
+
 @app.route('/api/chat/history', methods=['GET'])
 def get_chat_history():
-    """Get chat history for the current user"""
+    """Get enriched chat history with summaries, sources, and accuracy data"""
     try:
         if 'user_db_id' not in session:
             return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
         
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                # Get combined history from both searches and conversationHistory with summaries/results where available
-                query = """
+                # Get all searches with their associated data
+                search_query = """
                     SELECT
                         'search' AS type,
-                        s.search_id::text AS id,
-                        s.query_text,
-                        NULL::text AS response_text,
-                        s.timestamp AS entry_timestamp,
                         s.search_id,
-                        COALESCE(summary.summary_text, '') AS summary_text,
-                        summary.search_results_json
+                        s.query_text,
+                        s.timestamp,
+                        us.summary_text,
+                        sr.results AS search_results_json,
+                        sr.result_id
                     FROM searches s
-                    LEFT JOIN LATERAL (
-                        SELECT us.summary_text, sr.results AS search_results_json
-                        FROM usersummaries us
-                        JOIN search_results sr ON sr.result_id = us.result_id
-                        WHERE us.user_id = s.account_id
-                          AND sr.query = s.query_text
-                        ORDER BY us.created_at DESC
-                        LIMIT 1
-                    ) summary ON TRUE
+                    LEFT JOIN search_results sr ON sr.query = s.query_text
+                    LEFT JOIN usersummaries us ON us.result_id = sr.result_id AND us.user_id = s.account_id
                     WHERE s.account_id = %s
-                    
-                    UNION ALL
-                    
+                    ORDER BY s.timestamp DESC
+                """
+                cursor.execute(search_query, (session['user_db_id'],))
+                searches = cursor.fetchall()
+                
+                # Get all follow-up chat messages
+                chat_query = """
                     SELECT
                         'chat' AS type,
-                        ch.chat_id::text AS id,
+                        ch.chat_id,
                         ch.query_text,
                         ch.response_text,
-                        ch.timestamp AS entry_timestamp,
-                        ch.search_id,
-                        COALESCE(summary.summary_text, '') AS summary_text,
-                        summary.search_results_json
+                        ch.timestamp,
+                        ch.search_id
                     FROM "conversationHistory" ch
-                    LEFT JOIN searches s ON s.search_id = ch.search_id
-                    LEFT JOIN LATERAL (
-                        SELECT us.summary_text, sr.results AS search_results_json
-                        FROM usersummaries us
-                        JOIN search_results sr ON sr.result_id = us.result_id
-                        WHERE us.user_id = ch.user_id
-                          AND (
-                                (s.query_text IS NOT NULL AND sr.query = s.query_text)
-                                OR s.query_text IS NULL
-                              )
-                        ORDER BY us.created_at DESC
-                        LIMIT 1
-                    ) summary ON TRUE
                     WHERE ch.user_id = %s
-                    
-                    ORDER BY entry_timestamp DESC
+                    ORDER BY ch.timestamp ASC
                 """
-                cursor.execute(query, (session['user_db_id'], session['user_db_id']))
-                messages = cursor.fetchall()
+                cursor.execute(chat_query, (session['user_db_id'],))
+                chats = cursor.fetchall()
                 
-                # Convert to list of dicts for JSON response
-                messages_list = []
-                for msg in messages:
-                    messages_list.append({
-                        'type': msg['type'],
-                        'id': msg['id'],
-                        'query_text': msg['query_text'],
-                        'response_text': msg['response_text'],
-                        'timestamp': msg['entry_timestamp'].isoformat() if msg['entry_timestamp'] else None,
-                        'search_id': msg['search_id'],
-                        'summary_text': msg.get('summary_text'),
-                        'search_results': msg.get('search_results_json')
-                    })
+                # Organize messages by conversation threads
+                conversations = {}
                 
-                return jsonify({'status': 'success', 'messages': messages_list})
+                # Process searches (start of conversations)
+                for search in searches:
+                    search_id = search['search_id']
+                    
+                    # Parse search results JSON
+                    results = []
+                    if search['search_results_json']:
+                        try:
+                            results = json.loads(search['search_results_json']) if isinstance(search['search_results_json'], str) else search['search_results_json']
+                        except:
+                            results = []
+                    
+                    # Extract sources with trust indicators
+                    sources = []
+                    trusted_count = 0
+                    for result in results[:5]:
+                        url = result.get('url', '')
+                        is_trusted = any(domain in url for domain in [
+                            'rappler.com', 'inquirer.net', 'verafiles.org',
+                            'philstar.com', 'abs-cbn.com', 'tsek.ph', 'wikipedia.org'
+                        ])
+                        if is_trusted:
+                            trusted_count += 1
+                        
+                        sources.append({
+                            'title': result.get('title', 'Untitled'),
+                            'url': url,
+                            'is_trusted': is_trusted
+                        })
+                    
+                    # Calculate accuracy
+                    total_count = len(sources)
+                    if total_count > 0:
+                        true_percent = int((trusted_count / total_count) * 100)
+                        false_percent = 100 - true_percent
+                    else:
+                        true_percent = 0
+                        false_percent = 0
+                    
+                    conversations[search_id] = {
+                        'search_id': search_id,
+                        'title': search['query_text'][:60] + ('...' if len(search['query_text']) > 60 else ''),
+                        'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None,
+                        'messages': [
+                            {
+                                'role': 'user',
+                                'content': search['query_text'],
+                                'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None
+                            },
+                            {
+                                'role': 'bot',
+                                'content': search['summary_text'] or 'Summary not available',
+                                'summary': search['summary_text'] or 'Summary not available',
+                                'sources': sources,
+                                'accuracy': {
+                                    'true_percent': true_percent,
+                                    'false_percent': false_percent,
+                                    'trusted_count': trusted_count,
+                                    'total_count': total_count
+                                },
+                                'result_id': search['result_id'],
+                                'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None
+                            }
+                        ]
+                    }
+                
+                # Add follow-up chats to their respective conversations
+                for chat in chats:
+                    search_id = chat['search_id']
+                    if search_id and search_id in conversations:
+                        conversations[search_id]['messages'].extend([
+                            {
+                                'role': 'user',
+                                'content': chat['query_text'],
+                                'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
+                            },
+                            {
+                                'role': 'bot',
+                                'content': chat['response_text'] or 'Response not available',
+                                'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
+                            }
+                        ])
+                
+                # Convert to list and sort by timestamp
+                conversation_list = list(conversations.values())
+                conversation_list.sort(key=lambda x: x['timestamp'], reverse=True)
+                
+                return jsonify({
+                    'status': 'success',
+                    'conversations': conversation_list
+                })
                 
     except Exception as e:
         print("❌ Get chat history error:", e)
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': 'Failed to retrieve chat history'}), 500
 
 @app.route('/api/chat/update/<int:chat_id>', methods=['PUT'])
@@ -1016,6 +1080,56 @@ def save_chat_history():
     except Exception as e:
         print("❌ Save chat history error:", e)
         return jsonify({'status': 'error', 'message': 'Failed to save chat history'}), 500
+    
+    # Add this endpoint to app.py for deleting conversations
+
+@app.route('/api/chat/delete/<int:search_id>', methods=['DELETE'])
+def delete_conversation(search_id):
+    """Delete a conversation and all associated data"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Verify ownership
+                cursor.execute("""
+                    SELECT search_id FROM searches 
+                    WHERE search_id = %s AND account_id = %s
+                """, (search_id, session['user_db_id']))
+                
+                if not cursor.fetchone():
+                    return jsonify({'status': 'error', 'message': 'Conversation not found'}), 404
+                
+                # Delete related categories
+                cursor.execute("""
+                    DELETE FROM categories WHERE search_id = %s
+                """, (search_id,))
+                
+                # Delete related chat messages
+                cursor.execute("""
+                    DELETE FROM "conversationHistory" 
+                    WHERE search_id = %s AND user_id = %s
+                """, (search_id, session['user_db_id']))
+                
+                # Delete the search itself
+                cursor.execute("""
+                    DELETE FROM searches 
+                    WHERE search_id = %s AND account_id = %s
+                """, (search_id, session['user_db_id']))
+                
+                db.commit()
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Conversation deleted successfully'
+                })
+                
+    except Exception as e:
+        print("❌ Delete conversation error:", e)
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': 'Failed to delete conversation'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

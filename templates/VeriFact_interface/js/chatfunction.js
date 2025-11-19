@@ -1,4 +1,5 @@
 // Send Message
+
 function sendMessage() {
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chatBox");
@@ -7,6 +8,12 @@ function sendMessage() {
   if (input.value.trim() === "") return;
 
   const message = input.value.trim();
+  
+  // Hide empty state
+  const emptyState = document.querySelector('.empty-state');
+  if (emptyState) {
+    emptyState.style.display = 'none';
+  }
   
   // Move chat input to bottom
   chatInput.classList.remove("centered");
@@ -33,10 +40,20 @@ function sendMessage() {
   .then(data => {
     if (data.status === 'success') {
       if (data.is_first_message) {
-        // First message - trigger scraping
+        // First message - set current conversation ID and trigger scraping
+        if (window.chatManager) {
+          window.chatManager.currentConversationId = data.search_id;
+          window.chatManager.updateActiveConversation();
+        }
+        
         const loadingMsg = document.createElement('div');
         loadingMsg.className = 'bot-message';
-        loadingMsg.textContent = 'Searching and scraping sources…';
+        loadingMsg.innerHTML = `
+          <div style="text-align:center; padding:30px;">
+            <i class="fa fa-spinner fa-spin" style="font-size:32px; color:#f9c229;"></i>
+            <p style="margin-top:15px; color:#a0adb3;">Analyzing sources and generating summary...</p>
+          </div>
+        `;
         chatBox.appendChild(loadingMsg);
         chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -52,10 +69,37 @@ function sendMessage() {
             loadingMsg.parentNode.removeChild(loadingMsg);
           }
           if (scrape && scrape.status === 'success') {
-            // Generate bot response with the result_id
-            generateBotResponses(scrape.result_id, chatBox, true);
-            // Refresh trending topics after a new search
-            loadTrendingTopics();
+            // Fetch and display bot response
+            fetch(`/api/get-bot-response/${scrape.result_id}`, {
+              method: 'GET',
+              credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(botData => {
+              if (botData.status === 'success') {
+                // Build rich bot message
+                const botMsg = buildRichBotMessage(botData);
+                chatBox.appendChild(botMsg);
+                chatBox.scrollTop = chatBox.scrollHeight;
+                
+                // Update sources panel
+                updateSourcesList(botData.sources);
+                
+                // Refresh trending topics
+                loadTrendingTopics();
+                
+                // Reload conversations to show new one in sidebar
+                if (window.chatManager) {
+                  window.chatManager.loadFromServer();
+                }
+              } else {
+                showNotification('Failed to generate response', 'error');
+              }
+            })
+            .catch(err => {
+              console.error('Error fetching bot response:', err);
+              showNotification('Error generating response', 'error');
+            });
           } else {
             console.error('Scrape failed:', scrape);
             showNotification('Failed to scrape sources. Please try again.', 'error');
@@ -69,8 +113,26 @@ function sendMessage() {
           showNotification('Error scraping sources. Please try again.', 'error');
         });
       } else {
-        // Follow-up message - use chat_id
-        generateBotResponses(data.chat_id, chatBox, false);
+        // Follow-up message - simpler response (no scraping)
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'bot-message';
+        loadingMsg.textContent = 'Generating response...';
+        chatBox.appendChild(loadingMsg);
+        chatBox.scrollTop = chatBox.scrollHeight;
+        
+        // Simulate AI response for follow-ups (replace with actual backend call later)
+        setTimeout(() => {
+          if (loadingMsg && loadingMsg.parentNode) {
+            loadingMsg.parentNode.removeChild(loadingMsg);
+          }
+          
+          const botMsg = buildSimpleBotMessage('Thank you for your follow-up question. Based on the previous sources, here\'s what I can tell you...');
+          chatBox.appendChild(botMsg);
+          chatBox.scrollTop = chatBox.scrollHeight;
+          
+          // Update chat response in database
+          updateChatResponse(data.chat_id, 'Thank you for your follow-up question. Based on the previous sources, here\'s what I can tell you...');
+        }, 1000);
       }
     } else {
       console.error('Failed to save message:', data.message);
@@ -81,6 +143,130 @@ function sendMessage() {
     console.error('Error sending message:', error);
     showNotification('Error sending message. Please try again.', 'error');
   });
+}
+
+// Helper to build rich bot message with summary, sources, and accuracy
+function buildRichBotMessage(data) {
+  const botMsg = document.createElement('div');
+  botMsg.className = 'bot-message';
+  
+  botMsg.innerHTML = `
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <div class="url-row">
+          <strong>Response</strong>
+          <span class="response-title">${escapeHtml(data.query)}</span>
+        </div>
+        <div class="card-right">
+          <button class="icon-btn save-response-btn" type="button" title="Save response">
+            <i class="fa fa-save"></i>
+          </button>
+        </div>
+        <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+      </div>
+      <div class="accordion-content">
+        <div class="response-section">
+          <strong>Summary:</strong>
+          <p class="resp-summary">${escapeHtml(data.summary)}</p>
+          <hr>
+          <strong>Analysis</strong>
+          <p class="resp-analysis">According to the analysis, this information is <strong>${data.accuracy.true_percent}% credible</strong> based on source reliability.</p>
+
+          <div class="accuracy-card response-accuracy-card">
+            <div class="accuracy-bar">
+              <span class="true-label">
+                <i class="fa fa-check-circle"></i> 
+                <span class="true-percent">${data.accuracy.true_percent}</span>%
+              </span>
+              <div class="bar range-bar">
+                <div class="true" style="width: ${data.accuracy.true_percent}%"></div>
+                <div class="false" style="width: ${data.accuracy.false_percent}%"></div>
+              </div>
+              <span class="false-label">
+                <span class="false-percent">${data.accuracy.false_percent}</span>% 
+                <i class="fa fa-exclamation-triangle"></i>
+              </span>
+            </div>
+          </div>
+
+          <hr>
+          <strong>Key Findings:</strong>
+          <ul class="resp-keyfindings">
+            <li>${data.trusted_count} out of ${data.total_count} sources are from verified outlets</li>
+            <li>${data.total_count - data.trusted_count} unverified source${data.total_count - data.trusted_count !== 1 ? 's' : ''}</li>
+            ${data.accuracy.true_percent >= 80 ? '<li style="color:#4caf50;">High confidence in information accuracy</li>' : ''}
+            ${data.accuracy.true_percent < 50 ? '<li style="color:#e53935;">⚠️ Exercise caution - limited verified sources</li>' : ''}
+          </ul>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Wire up accordion toggle
+  const toggleBtn = botMsg.querySelector('.accordion-toggle');
+  const accordionItem = botMsg.querySelector('.accordion-item');
+  if (toggleBtn && accordionItem) {
+    toggleBtn.addEventListener('click', () => {
+      if (accordionItem.classList.contains('open')) {
+        closeAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        openAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+
+  // Wire up save button
+  const saveBtn = botMsg.querySelector('.save-response-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveResponseToArchive(botMsg);
+      saveBtn.classList.add('saved');
+      saveBtn.title = 'Saved';
+      showNotification('Saved response to Archive', 'success');
+    });
+  }
+  
+  return botMsg;
+}
+
+// Helper to build simple bot message (for follow-ups without full scraping)
+function buildSimpleBotMessage(content) {
+  const botMsg = document.createElement('div');
+  botMsg.className = 'bot-message';
+  
+  botMsg.innerHTML = `
+    <div class="accordion-item">
+      <div class="accordion-header">
+        <div class="url-row">
+          <strong>Response</strong>
+        </div>
+        <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+      </div>
+      <div class="accordion-content">
+        <p>${escapeHtml(content)}</p>
+      </div>
+    </div>
+  `;
+  
+  // Wire up accordion toggle
+  const toggleBtn = botMsg.querySelector('.accordion-toggle');
+  const accordionItem = botMsg.querySelector('.accordion-item');
+  if (toggleBtn && accordionItem) {
+    toggleBtn.addEventListener('click', () => {
+      if (accordionItem.classList.contains('open')) {
+        closeAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        openAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+  
+  return botMsg;
 }
 
 // Generate bot responses (NEW COMPACT VERSION)
