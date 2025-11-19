@@ -82,7 +82,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="lenroy3221",  #Change this to your own password
+        password="Corl4453",  #Change this to your own password
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -695,31 +695,57 @@ def get_chat_history():
         
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                # Get combined history from both searches and conversationHistory
+                # Get combined history from both searches and conversationHistory with summaries/results where available
                 query = """
-                    SELECT 
-                        'search' as type,
-                        search_id as id,
-                        query_text,
-                        '' as response_text,
-                        timestamp,
-                        NULL as search_id
-                    FROM searches
-                    WHERE account_id = %s
+                    SELECT
+                        'search' AS type,
+                        s.search_id::text AS id,
+                        s.query_text,
+                        NULL::text AS response_text,
+                        s.timestamp AS entry_timestamp,
+                        s.search_id,
+                        COALESCE(summary.summary_text, '') AS summary_text,
+                        summary.search_results_json
+                    FROM searches s
+                    LEFT JOIN LATERAL (
+                        SELECT us.summary_text, sr.results AS search_results_json
+                        FROM usersummaries us
+                        JOIN search_results sr ON sr.result_id = us.result_id
+                        WHERE us.user_id = s.account_id
+                          AND sr.query = s.query_text
+                        ORDER BY us.created_at DESC
+                        LIMIT 1
+                    ) summary ON TRUE
+                    WHERE s.account_id = %s
                     
                     UNION ALL
                     
-                    SELECT 
-                        'chat' as type,
-                        chat_id as id,
-                        query_text,
-                        response_text,
-                        timestamp,
-                        NULL as search_id
-                    FROM "conversationHistory"
-                    WHERE user_id = %s
+                    SELECT
+                        'chat' AS type,
+                        ch.chat_id::text AS id,
+                        ch.query_text,
+                        ch.response_text,
+                        ch.timestamp AS entry_timestamp,
+                        ch.search_id,
+                        COALESCE(summary.summary_text, '') AS summary_text,
+                        summary.search_results_json
+                    FROM "conversationHistory" ch
+                    LEFT JOIN searches s ON s.search_id = ch.search_id
+                    LEFT JOIN LATERAL (
+                        SELECT us.summary_text, sr.results AS search_results_json
+                        FROM usersummaries us
+                        JOIN search_results sr ON sr.result_id = us.result_id
+                        WHERE us.user_id = ch.user_id
+                          AND (
+                                (s.query_text IS NOT NULL AND sr.query = s.query_text)
+                                OR s.query_text IS NULL
+                              )
+                        ORDER BY us.created_at DESC
+                        LIMIT 1
+                    ) summary ON TRUE
+                    WHERE ch.user_id = %s
                     
-                    ORDER BY timestamp ASC
+                    ORDER BY entry_timestamp DESC
                 """
                 cursor.execute(query, (session['user_db_id'], session['user_db_id']))
                 messages = cursor.fetchall()
@@ -732,8 +758,10 @@ def get_chat_history():
                         'id': msg['id'],
                         'query_text': msg['query_text'],
                         'response_text': msg['response_text'],
-                        'timestamp': msg['timestamp'].isoformat() if msg['timestamp'] else None,
-                        'search_id': msg['search_id']
+                        'timestamp': msg['entry_timestamp'].isoformat() if msg['entry_timestamp'] else None,
+                        'search_id': msg['search_id'],
+                        'summary_text': msg.get('summary_text'),
+                        'search_results': msg.get('search_results_json')
                     })
                 
                 return jsonify({'status': 'success', 'messages': messages_list})
@@ -925,6 +953,69 @@ def get_trending():
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': 'Failed to retrieve trending topics'}), 500
 
+@app.route('/api/chat/save_history', methods=['POST'])
+def save_chat_history():
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+
+        data = request.get_json() or {}
+        messages = data.get('messages') or []
+
+        if not isinstance(messages, list) or len(messages) == 0:
+            return jsonify({'status': 'error', 'message': 'No messages to save'}), 400
+
+        def build_conversation_pairs(raw_messages):
+            pairs = []
+            pending_user_message = None
+
+            for msg in raw_messages:
+                role = (msg.get('role') or '').strip().lower()
+                content = (msg.get('content') or '').strip()
+
+                if not content:
+                    continue
+
+                if role == 'user':
+                    if pending_user_message:
+                        pairs.append((pending_user_message, ''))
+                    pending_user_message = content
+                else:
+                    if pending_user_message:
+                        pairs.append((pending_user_message, content))
+                        pending_user_message = None
+
+            if pending_user_message:
+                pairs.append((pending_user_message, ''))
+
+            return pairs
+
+        conversation_pairs = build_conversation_pairs(messages)
+
+        if not conversation_pairs:
+            return jsonify({'status': 'error', 'message': 'No user messages to save'}), 400
+
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                insert_sql = """
+                    INSERT INTO "conversationHistory" (user_id, query_text, response_text)
+                    VALUES (%s, %s, %s)
+                """
+
+                for user_text, bot_text in conversation_pairs:
+                    cursor.execute(insert_sql, (session['user_db_id'], user_text, bot_text))
+
+            db.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Chat history saved',
+            'saved_messages': len(conversation_pairs)
+        }), 200
+
+    except Exception as e:
+        print("❌ Save chat history error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to save chat history'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

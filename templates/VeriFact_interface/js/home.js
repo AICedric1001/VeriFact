@@ -605,38 +605,5 @@ document.addEventListener('DOMContentLoaded', () => {
   syncChatInputHeight();
 });
 
-document.addEventListener('DOMContentLoaded', function() {
-  // New Chat button functionality
-  const newChatBtn = document.querySelector('button[aria-label="New Chat"]');
-  if (newChatBtn) {
-    newChatBtn.addEventListener('click', function () {
-      // Clear messages in chat area
-      const chatBox = document.getElementById('chatBox');
-      if (chatBox) chatBox.innerHTML = '';
-      // Optionally clear sources panel
-      const sourcesList = document.getElementById('sourcesList');
-      if (sourcesList) {
-        sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
-      }
-      // Reset chat input to centered
-      const chatInput = document.getElementById('chatInput');
-      if (chatInput) {
-        chatInput.classList.remove('bottom');
-        chatInput.classList.add('centered');
-      }
-      // Clear the textarea/input
-      const textarea = document.querySelector('.chat-input textarea');
-      if (textarea) {
-        textarea.value = '';
-        textarea.style.height = 'auto';
-      }
-      // (Future) Multi-session support stub: save current session if desired
-      // and start a new session, keeping sidebar/history visible.
-      //
-      // Example:
-      // saveCurrentSessionToHistory();
-      // createNewSession();
-      // updateSidebarSessions();
-    });
-  }
-});
+// New chat button interactions are handled centrally in newchat.js so that
+// chatManager can persist conversations before clearing the UI.

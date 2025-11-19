@@ -205,105 +205,29 @@ function loadChatHistory() {
   })
   .then(response => response.json())
   .then(data => {
-    if (data.status === 'success' && data.messages.length > 0) {
+    if (data.status === 'success') {
+      // Keep the main chat panel blank on load but retain history data for future use
+      window.serverChatHistory = data.messages || [];
+
       const chatBox = document.getElementById('chatBox');
+      if (chatBox) {
+        chatBox.innerHTML = '';
+      }
+
       const chatInput = document.getElementById('chatInput');
-      
-      // Move chat input to bottom if there are messages
-      chatInput.classList.remove("centered");
-      chatInput.classList.add("bottom");
-      
-      // Load each message
-      data.messages.forEach(msg => {
-        // Add user message
-        if (msg.query_text) {
-          const userMsg = document.createElement("div");
-          userMsg.className = "user-message";
-          userMsg.innerText = msg.query_text;
-          chatBox.appendChild(userMsg);
-        }
-        
-        // Add bot response if available (only for chat messages, not search messages)
-        if (msg.response_text && msg.type === 'chat') {
-          const botMsg = document.createElement("div");
-          botMsg.className = "bot-message";
-            botMsg.innerHTML = `
-              <div class="accordion-item">
-                    <div class="accordion-header">
-                      <div class="url-row">
-                        <strong>Response:</strong> 
-                        <span>AI Analysis Complete</span>
-                        <i class="fa fa-check-circle"></i>
-                      </div>
-                      <div class="card-right">
-                        <button class="icon-btn save-response-btn" type="button" title="Save response"><i class="fa fa-save"></i></button>
-                      </div>
-                      <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
-                    </div>
-                <div class="accordion-content">
-                  <hr>
-                  <strong>Title:</strong> <span class="resp-title-text">${msg.title || 'earthquake'}</span>
-                  <hr>
-                  <strong>Summary:</strong>
-                  <p class="resp-summary">${msg.response_text}</p>
-                  <hr>
-  
-                  <strong>Analysis</strong>
-                  <p class="resp-analysis">According to the summary this is <strong>75% accurate</strong></p>
-                  <div class="accuracy-card response-accuracy-card">
-                    <div class="accuracy-bar">
-                      <span class="true-label"><i class="fa fa-check-circle"></i> <span class="true-percent">75</span>%</span>
-                      <div class="bar range-bar">
-                        <div class="true" style="width: 75%"></div>
-                        <div class="false" style="width: 25%"></div>
-                      </div>
-                      <span class="false-label"><span class="false-percent">25</span>% <i class="fa fa-exclamation-triangle"></i></span>
-                    </div>
-                  </div>
-                  <hr>
-                  <strong>Key findings:</strong>
-                  <ul class="resp-keyfindings">
-                    <li>3 out of five articles provide accurate information</li>
-                    <li>2 out of five articles provide inaccurate information</li>
-                  </ul>
-                </div>
-              </div>
-            `;
-          chatBox.appendChild(botMsg);
-          
-          // Enable toggle for this accordion
-            const toggleBtn = botMsg.querySelector(".accordion-toggle");
-            const accordionItem = botMsg.querySelector(".accordion-item");
-            toggleBtn.addEventListener("click", () => {
-              if (accordionItem.classList.contains('open')) {
-                closeAccordion(accordionItem);
-                toggleBtn.setAttribute('aria-expanded', 'false');
-              } else {
-                openAccordion(accordionItem);
-                toggleBtn.setAttribute('aria-expanded', 'true');
-              }
-            });
-          // Initialize scoped accuracy for restored message (defaults to 0/0)
-          const restoredAcc = botMsg.querySelector('.response-accuracy-card');
-          if (restoredAcc) {
-            scopedUpdateAccuracy(restoredAcc, 0, 0);
-          }
-          // Wire save button for restored message
-          const restoredSaveBtn = botMsg.querySelector('.save-response-btn');
-          if (restoredSaveBtn) {
-            restoredSaveBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              saveResponseToArchive(botMsg);
-              restoredSaveBtn.classList.add('saved');
-              restoredSaveBtn.title = 'Saved';
-              showNotification('Saved response to Archive', 'success');
-            });
-          }
-        }
-      });
-      
-      // Scroll to bottom
-      chatBox.scrollTop = chatBox.scrollHeight;
+      if (chatInput) {
+        chatInput.classList.remove('bottom');
+        chatInput.classList.add('centered');
+      }
+
+      const sourcesList = document.getElementById('sourcesList');
+      if (sourcesList) {
+        sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
+      }
+
+      if (window.chatManager && typeof window.chatManager.hydrateFromServerHistory === 'function') {
+        window.chatManager.hydrateFromServerHistory(window.serverChatHistory);
+      }
     }
   })
   .catch(error => {
