@@ -38,8 +38,9 @@ function sendMessage() {
   })
   .then(response => response.json())
   .then(data => {
-    if (data.status === 'success') {
+      if (data.status === 'success') {
       if (data.is_first_message) {
+        const firstChatId = data.chat_id;
         // First message - set current conversation ID and trigger scraping
         if (window.chatManager) {
           window.chatManager.currentConversationId = data.search_id;
@@ -81,6 +82,10 @@ function sendMessage() {
                 const botMsg = buildRichBotMessage(botData);
                 chatBox.appendChild(botMsg);
                 chatBox.scrollTop = chatBox.scrollHeight;
+                
+                if (firstChatId) {
+                  updateChatResponse(firstChatId, botData.summary);
+                }
                 
                 // Update sources panel
                 updateSourcesList(botData.sources);

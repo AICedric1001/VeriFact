@@ -82,7 +82,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="Corl4453",  #Change this to your own password
+        password="radgelwashere4453",  #Change this to your own password
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -146,17 +146,43 @@ def index():
                         import json
                         results_json = json.dumps(results)
                         
-                        # Insert into search_results table
-                        insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
-                        cursor.execute(insert_result_sql, (query, results_json))
-                        result_id = cursor.fetchone()['result_id']
+                        # Check if search_results already exists for this query (within last hour to reuse recent results)
+                        # First try with created_at if it exists, otherwise fallback to query-only check
+                        check_result_sql = "SELECT result_id FROM search_results WHERE query = %s ORDER BY result_id DESC LIMIT 1"
+                        cursor.execute(check_result_sql, (query,))
+                        existing_result = cursor.fetchone()
                         
-                        # Insert into searches table to link with user
+                        # If found, optionally check if it's recent (within 1 hour) - this is optional
+                        # For now, we'll reuse any existing result for the same query to avoid duplicates
+                        if existing_result:
+                            result_id = existing_result['result_id']
+                        else:
+                            # Insert into search_results table only if it doesn't exist
+                            insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
+                            cursor.execute(insert_result_sql, (query, results_json))
+                            result_id = cursor.fetchone()['result_id']
+                        
+                        # Check if searches already exists for this user and query (within last 5 minutes)
                         search_id = None
                         if 'user_db_id' in session:
-                            insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id"
-                            cursor.execute(insert_search_sql, (session['user_db_id'], query))
-                            search_id = cursor.fetchone()['search_id']
+                            check_search_sql = """
+                                SELECT search_id FROM searches 
+                                WHERE account_id = %s 
+                                AND query_text = %s 
+                                AND timestamp > NOW() - INTERVAL '5 minutes'
+                                ORDER BY timestamp DESC 
+                                LIMIT 1
+                            """
+                            cursor.execute(check_search_sql, (session['user_db_id'], query))
+                            existing_search = cursor.fetchone()
+                            
+                            if existing_search:
+                                search_id = existing_search['search_id']
+                            else:
+                                # Insert into searches table only if it doesn't exist
+                                insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id"
+                                cursor.execute(insert_search_sql, (session['user_db_id'], query))
+                                search_id = cursor.fetchone()['search_id']
                         
                         # Store each article as its own row in articles table
                         for item in results:
@@ -188,15 +214,22 @@ def index():
                         # Extract categories from user search text and store in categories table
                         if search_id:  # Only extract categories if we have a search_id
                             search_categories = extract_categories_from_search(query)
+                            normalized_seen = set()
                             for category in search_categories:
+                                # Normalize category to prevent duplicates (lowercase, trim, single spaces)
+                                normalized = re.sub(r"\s+", " ", (category or "").strip().lower())
+                                if not normalized or normalized in normalized_seen:
+                                    continue
+                                normalized_seen.add(normalized)
+                                
                                 # Check if this category already exists for this search to prevent duplicates
-                                check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(entity_text) = LOWER(%s)"
-                                cursor.execute(check_sql, (search_id, category))
+                                check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
+                                cursor.execute(check_sql, (search_id, normalized))
                                 existing = cursor.fetchone()
                                 
                                 if not existing:
                                     insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
-                                    cursor.execute(insert_category_sql, (search_id, category, 'SEARCH_KEYWORD'))
+                                    cursor.execute(insert_category_sql, (search_id, normalized, 'SEARCH_KEYWORD'))
                         
                         # Note: We only store categories extracted from search query text, not from scraped content
                         
@@ -271,15 +304,41 @@ def api_scrape():
             with db.cursor() as cursor:
                 import json
                 results_json = json.dumps(results)
-                insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
-                cursor.execute(insert_result_sql, (query, results_json))
-                result_id = cursor.fetchone()['result_id']
+                
+                # Check if search_results already exists for this query (reuse existing to avoid duplicates)
+                check_result_sql = "SELECT result_id FROM search_results WHERE query = %s ORDER BY result_id DESC LIMIT 1"
+                cursor.execute(check_result_sql, (query,))
+                existing_result = cursor.fetchone()
+                
+                if existing_result:
+                    result_id = existing_result['result_id']
+                else:
+                    # Insert into search_results table only if it doesn't exist
+                    insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
+                    cursor.execute(insert_result_sql, (query, results_json))
+                    result_id = cursor.fetchone()['result_id']
 
+                # Check if searches already exists for this user and query (within last 5 minutes)
                 search_id = None
                 if 'user_db_id' in session:
-                    insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id"
-                    cursor.execute(insert_search_sql, (session['user_db_id'], query))
-                    search_id = cursor.fetchone()['search_id']
+                    check_search_sql = """
+                        SELECT search_id FROM searches 
+                        WHERE account_id = %s 
+                        AND query_text = %s 
+                        AND timestamp > NOW() - INTERVAL '5 minutes'
+                        ORDER BY timestamp DESC 
+                        LIMIT 1
+                    """
+                    cursor.execute(check_search_sql, (session['user_db_id'], query))
+                    existing_search = cursor.fetchone()
+                    
+                    if existing_search:
+                        search_id = existing_search['search_id']
+                    else:
+                        # Insert into searches table only if it doesn't exist
+                        insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id"
+                        cursor.execute(insert_search_sql, (session['user_db_id'], query))
+                        search_id = cursor.fetchone()['search_id']
 
                 # Insert each article as its own row linked to this result_id
                 for item in results:
@@ -311,15 +370,22 @@ def api_scrape():
                 # Extract categories from user search text and store in categories table
                 if search_id:  # Only extract categories if we have a search_id
                     search_categories = extract_categories_from_search(query)
+                    normalized_seen = set()
                     for category in search_categories:
+                        # Normalize category to prevent duplicates (lowercase, trim, single spaces)
+                        normalized = re.sub(r"\s+", " ", (category or "").strip().lower())
+                        if not normalized or normalized in normalized_seen:
+                            continue
+                        normalized_seen.add(normalized)
+                        
                         # Check if this category already exists for this search to prevent duplicates
-                        check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(entity_text) = LOWER(%s)"
-                        cursor.execute(check_sql, (search_id, category))
+                        check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
+                        cursor.execute(check_sql, (search_id, normalized))
                         existing = cursor.fetchone()
                         
                         if not existing:
                             insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
-                            cursor.execute(insert_category_sql, (search_id, category, 'SEARCH_KEYWORD'))
+                            cursor.execute(insert_category_sql, (search_id, normalized, 'SEARCH_KEYWORD'))
                 
                 # Note: We only store categories extracted from search query text, not from scraped content
 
@@ -617,17 +683,9 @@ def send_chat_message():
                             if not normalized or normalized in normalized_seen:
                                 continue
                             normalized_seen.add(normalized)
-                            # Skip if the category already exists for this user across ANY of their searches
-                            check_sql = (
-                                """
-                                SELECT c.category_id
-                                FROM categories c
-                                JOIN searches s ON s.search_id = c.search_id
-                                WHERE s.account_id = %s AND LOWER(TRIM(c.entity_text)) = %s
-                                LIMIT 1
-                                """
-                            )
-                            cursor.execute(check_sql, (session['user_db_id'], normalized))
+                            # Check if category already exists for THIS search_id to prevent duplicates within same search
+                            check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
+                            cursor.execute(check_sql, (recent_search['search_id'], normalized))
                             existing = cursor.fetchone()
                             if not existing:
                                 insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
@@ -644,10 +702,34 @@ def send_chat_message():
                         'is_first_message': False
                     })
                 else:
-                    # First message - save to searches table
-                    insert_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id, timestamp"
-                    cursor.execute(insert_sql, (session['user_db_id'], message))
-                    result = cursor.fetchone()
+                    # First message - check if search already exists for this query (within last 5 minutes)
+                    check_first_search_sql = """
+                        SELECT search_id, timestamp FROM searches 
+                        WHERE account_id = %s 
+                        AND query_text = %s 
+                        AND timestamp > NOW() - INTERVAL '5 minutes'
+                        ORDER BY timestamp DESC 
+                        LIMIT 1
+                    """
+                    cursor.execute(check_first_search_sql, (session['user_db_id'], message))
+                    existing_first_search = cursor.fetchone()
+                    
+                    if existing_first_search:
+                        result = existing_first_search
+                    else:
+                        # Insert into searches table only if it doesn't exist
+                        insert_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id, timestamp"
+                        cursor.execute(insert_sql, (session['user_db_id'], message))
+                        result = cursor.fetchone()
+                    
+                    # Save the first user message to conversationHistory as well
+                    insert_chat_sql = """
+                        INSERT INTO "conversationHistory" (user_id, query_text, response_text)
+                        VALUES (%s, %s, %s)
+                        RETURNING chat_id, timestamp
+                    """
+                    cursor.execute(insert_chat_sql, (session['user_db_id'], message, ''))
+                    chat_entry = cursor.fetchone()
                     # Extract categories from the user message and store in categories table
                     try:
                         chat_categories = extract_categories_from_search(message)
@@ -657,17 +739,9 @@ def send_chat_message():
                             if not normalized or normalized in normalized_seen:
                                 continue
                             normalized_seen.add(normalized)
-                            # Skip if the category already exists for this user across ANY of their searches
-                            check_sql = (
-                                """
-                                SELECT c.category_id
-                                FROM categories c
-                                JOIN searches s ON s.search_id = c.search_id
-                                WHERE s.account_id = %s AND LOWER(TRIM(c.entity_text)) = %s
-                                LIMIT 1
-                                """
-                            )
-                            cursor.execute(check_sql, (session['user_db_id'], normalized))
+                            # Check if category already exists for THIS search_id to prevent duplicates within same search
+                            check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
+                            cursor.execute(check_sql, (result['search_id'], normalized))
                             existing = cursor.fetchone()
                             if not existing:
                                 insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
@@ -679,6 +753,7 @@ def send_chat_message():
                     return jsonify({
                         'status': 'success',
                         'search_id': result['search_id'],
+                        'chat_id': chat_entry['chat_id'],
                         'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
                         'is_first_message': True
                     })
@@ -725,7 +800,25 @@ def get_chat_history():
                         ch.query_text,
                         ch.response_text,
                         ch.timestamp,
-                        ch.search_id
+                        COALESCE(
+                            (
+                                SELECT s.search_id
+                                FROM searches s
+                                WHERE s.account_id = ch.user_id
+                                  AND ch.timestamp IS NOT NULL
+                                  AND s.timestamp IS NOT NULL
+                                  AND s.timestamp <= ch.timestamp
+                                ORDER BY s.timestamp DESC
+                                LIMIT 1
+                            ),
+                            (
+                                SELECT s2.search_id
+                                FROM searches s2
+                                WHERE s2.account_id = ch.user_id
+                                ORDER BY s2.timestamp DESC NULLS LAST
+                                LIMIT 1
+                            )
+                        ) AS search_id
                     FROM "conversationHistory" ch
                     WHERE ch.user_id = %s
                     ORDER BY ch.timestamp ASC
@@ -802,22 +895,26 @@ def get_chat_history():
                         ]
                     }
                 
-                # Add follow-up chats to their respective conversations
+                # Add follow-up chats to their respective conversations using the derived search_id
                 for chat in chats:
-                    search_id = chat['search_id']
-                    if search_id and search_id in conversations:
-                        conversations[search_id]['messages'].extend([
+                    search_id = chat.get('search_id')
+                    if not search_id or search_id not in conversations:
+                        continue
+                    
+                        messages_to_add = [
                             {
                                 'role': 'user',
                                 'content': chat['query_text'],
                                 'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
-                            },
-                            {
-                                'role': 'bot',
-                                'content': chat['response_text'] or 'Response not available',
-                                'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
                             }
-                        ])
+                        ]
+                        if chat.get('response_text') and chat['response_text'].strip():
+                            messages_to_add.append({
+                                'role': 'bot',
+                                'content': chat['response_text'],
+                                'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
+                            })
+                        conversations[search_id]['messages'].extend(messages_to_add)
                 
                 # Convert to list and sort by timestamp
                 conversation_list = list(conversations.values())
