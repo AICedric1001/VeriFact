@@ -34,24 +34,12 @@
 
         <!-- Sidebar -->
         <aside id="sidebar" class="sidebar">
-            <div class="sidebar-header">
-                <div class="title">
-                    <span class="title-icon" aria-hidden="true"><i class="fa fa-history"></i></span>
-                    <span>HISTORY</span>
-                </div>
-                <div class="actions">
-                    <div class="search-box">
-                        <input type="text" placeholder="Search..." />
-                        <button><i class="fas fa-search"></i></button>
-                    </div>
-                    <button class="icon-btn" aria-label="Delete All"><i class="fa fa-trash"></i></button>
-                    <label class="checkbox" aria-label="Select"><input type="checkbox"><span></span></label>
-                </div>
-            </div>
 
+            
             <div class="sidebar-content">
-                <div class="accordion">
-                    
+                <div class="chat-history">
+                    <!-- Chat history items will be added here by JavaScript -->
+                </div>
             </div>
         </aside>
 
@@ -115,7 +103,13 @@
 
                 <section class="page-container chat-panel">
                     <div class="chat-container" id="chatContainer">
-                        <div class="chat-box" id="chatBox"></div>
+                        <div class="chat-box" id="chatBox">
+                        </div>
+                        <div class="empty-state">
+                            <div class="empty-state-content">
+                                <h2>What information would you like to know?</h2>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Chat input moved outside the scrollable chat container so the
@@ -147,6 +141,14 @@
                         </div>
                     </div>
                     <ul id="trendingList" class="trending-list">
+                        <li>Global earthquake updates</li>
+                        <li>Climate change reports</li>
+                        <li>Technology breakthroughs</li>
+                        <li>Healthcare innovations</li>
+                        <li>Global earthquake updates</li>
+                        <li>Climate change reports</li>
+                        <li>Technology breakthroughs</li>
+                        <li>Healthcare innovations</li>
                         <li>Global earthquake updates</li>
                         <li>Climate change reports</li>
                         <li>Technology breakthroughs</li>
@@ -202,8 +204,18 @@
             </div>
         </div>
 
+        <script src="js/new_chat.js"></script>
+        <script src="js/chatfunction.js"></script>
         <script src="js/home.js"></script>
-        <script src="js/function.js"></script>
+        <script src="js/sidebar.js"></script>
+        <script src="js/settings.js"></script>
+        <script src="js/accuracy.js"></script>
+        <script src="js/archive.js"></script>
+        <script src="js/sources_trends.js"></script>
+        <script src="js/landing_scripts.js"></script>
+
+
+
 
 
         
