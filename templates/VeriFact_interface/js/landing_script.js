@@ -735,7 +735,7 @@ if (demoTextarea && analyzeButton) {
 }
 
 // Notification system
-function showNotification(message, type = 'info') {
+window.showNotification = function(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `fixed top-20 right-4 z-50 p-4 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300`;
     

@@ -344,7 +344,8 @@ const textarea = document.querySelector('.chat-input textarea');
 
 
   // Notification system
-  function showNotification(message, type = 'info') {
+  // Make showNotification globally available
+  window.showNotification = function(message, type = 'info') {
     // Remove existing notifications
     const existingNotification = document.querySelector('.notification');
     if (existingNotification) {
@@ -363,43 +364,12 @@ const textarea = document.querySelector('.chat-input textarea');
 
     document.body.appendChild(notification);
 
-    // Auto-remove after 3s
+    // Auto remove after 3 seconds
     setTimeout(() => {
       notification.classList.add('hide');
       setTimeout(() => notification.remove(), 300);
     }, 3000);
-
-
-    
-    // Add animation keyframes
-    if (!document.querySelector('#notification-styles')) {
-      const style = document.createElement('style');
-      style.id = 'notification-styles';
-      style.textContent = `
-        @keyframes slideIn {
-          from { transform: translateX(100%); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes slideOut {
-          from { transform: translateX(0); opacity: 1; }
-          to { transform: translateX(100%); opacity: 0; }
-        }
-      `;
-      document.head.appendChild(style);
-    }
-    
-    document.body.appendChild(notification);
-    
-    // Auto remove after 2 seconds
-    setTimeout(() => {
-      notification.style.animation = 'slideOut 0.2s ease-in';
-      setTimeout(() => {
-        if (notification.parentNode) {
-          notification.remove();
-        }
-      }, 200);
-    }, 2000);
-  }
+  };
 
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {

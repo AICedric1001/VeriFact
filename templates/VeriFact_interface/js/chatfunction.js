@@ -1,5 +1,4 @@
 // Send Message
-
 function sendMessage() {
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chatBox");
@@ -156,7 +155,7 @@ function buildRichBotMessage(data) {
   botMsg.className = 'bot-message';
   
   botMsg.innerHTML = `
-    <div class="accordion-item">
+    <div class="accordion-item" open>
       <div class="accordion-header">
         <div class="url-row">
           <strong>Response</strong>
@@ -167,7 +166,7 @@ function buildRichBotMessage(data) {
             <i class="fa fa-save"></i>
           </button>
         </div>
-        <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+        <button class="accordion-toggle" aria-expanded="true"><i class="fa fa-angle-double-down"></i></button>
       </div>
       <div class="accordion-content">
         <div class="response-section">
