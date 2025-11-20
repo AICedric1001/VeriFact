@@ -1179,6 +1179,7 @@ def get_chat_history():
                         'search_id': search_id,
                         'title': search['query_text'][:60] + ('...' if len(search['query_text']) > 60 else ''),
                         'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None,
+                        'search_query': search['query_text'],  # Store for duplicate detection
                         'messages': [
                             {
                                 'role': 'user',
@@ -1207,6 +1208,12 @@ def get_chat_history():
                 for chat in chats:
                     search_id = chat.get('search_id')
                     if not search_id or search_id not in conversations:
+                        continue
+                    
+                    # Skip chat messages that match the search query text (to avoid duplicating the initial message)
+                    search_query = conversations[search_id].get('search_query', '')
+                    if chat['query_text'].strip().lower() == search_query.strip().lower():
+                        # This is the initial search message, already represented by the search
                         continue
                     
                     messages_to_add = [
@@ -1274,22 +1281,44 @@ def update_chat_response(chat_id):
 
 @app.route('/api/chat/clear', methods=['DELETE'])
 def clear_chat_history():
-    """Clear all chat history for the current user"""
+    """Clear all chat history, searches, and related data for the current user"""
     try:
         if 'user_db_id' not in session:
             return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
         
         with get_db_connection() as db:
             with db.cursor() as cursor:
+                # Get all search_ids for this user first
+                cursor.execute("""
+                    SELECT search_id FROM searches WHERE account_id = %s
+                """, (session['user_db_id'],))
+                search_ids = [row['search_id'] for row in cursor.fetchall()]
+                
+                # Delete all categories for this user's searches
+                if search_ids:
+                    cursor.execute("""
+                        DELETE FROM categories 
+                        WHERE search_id = ANY(%s)
+                    """, (search_ids,))
+                
                 # Delete all chat history for this user
-                delete_sql = "DELETE FROM \"conversationHistory\" WHERE user_id = %s"
-                cursor.execute(delete_sql, (session['user_db_id'],))
+                cursor.execute("""
+                    DELETE FROM "conversationHistory" WHERE user_id = %s
+                """, (session['user_db_id'],))
+                
+                # Delete all searches for this user
+                cursor.execute("""
+                    DELETE FROM searches WHERE account_id = %s
+                """, (session['user_db_id'],))
+                
                 db.commit()
                 
                 return jsonify({'status': 'success', 'message': 'Chat history cleared'})
                 
     except Exception as e:
         print("❌ Clear chat history error:", e)
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': 'Failed to clear chat history'}), 500
     
 @app.route('/api/get-bot-response/<int:result_id>', methods=['GET'])
@@ -1486,16 +1515,28 @@ def delete_conversation(search_id):
                 if not cursor.fetchone():
                     return jsonify({'status': 'error', 'message': 'Conversation not found'}), 404
                 
+                # Get the search query text to match chat messages
+                cursor.execute("""
+                    SELECT query_text FROM searches 
+                    WHERE search_id = %s AND account_id = %s
+                """, (search_id, session['user_db_id']))
+                search_data = cursor.fetchone()
+                
+                if not search_data:
+                    return jsonify({'status': 'error', 'message': 'Conversation not found'}), 404
+                
+                query_text = search_data['query_text']
+                
                 # Delete related categories
                 cursor.execute("""
                     DELETE FROM categories WHERE search_id = %s
                 """, (search_id,))
                 
-                # Delete related chat messages
+                # Delete related chat messages (match by query_text since conversationHistory has no search_id)
                 cursor.execute("""
                     DELETE FROM "conversationHistory" 
-                    WHERE search_id = %s AND user_id = %s
-                """, (search_id, session['user_db_id']))
+                    WHERE user_id = %s AND query_text = %s
+                """, (session['user_db_id'], query_text))
                 
                 # Delete the search itself
                 cursor.execute("""
