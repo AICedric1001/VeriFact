@@ -1,4 +1,8 @@
 from flask import Flask, render_template, request, redirect, session, jsonify, send_from_directory, Response
+import json
+import os
+from urllib.parse import urlparse
+
 import psycopg2
 import psycopg2.extras
 from scraper import main_system, search_serpapi
@@ -7,7 +11,6 @@ try:
     load_dotenv()
 except Exception:
     pass
-import os
 # Normalize SERPAPI env var names so either works
 if os.getenv("SERPAPI_KEY") and not os.getenv("SERPAPI_API_KEY"):
     os.environ["SERPAPI_API_KEY"] = os.getenv("SERPAPI_KEY")
@@ -34,6 +37,17 @@ except OSError:
 # Config for image uploads
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'img')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+TRUSTED_DOMAINS = [
+    'rappler.com',
+    'inquirer.net',
+    'verafiles.org',
+    'philstar.com',
+    'abs-cbn.com',
+    'tsek.ph',
+    'wikipedia.org'
+]
+MAX_RELEVANT_SOURCES = int(os.getenv("VERIFACT_MAX_RELEVANT_SOURCES", "12"))
+TRUSTED_SOURCE_WEIGHT = float(os.getenv("VERIFACT_TRUSTED_SOURCE_WEIGHT", "0.25"))
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 if not os.path.exists(UPLOAD_FOLDER):
@@ -78,11 +92,135 @@ def extract_categories_from_search(search_text):
     # Convert set to list and return
     return list(categories)
 
+def parse_results_payload(results_payload):
+    """Ensure we always work with a list of result dicts."""
+    if not results_payload:
+        return []
+    if isinstance(results_payload, str):
+        try:
+            return json.loads(results_payload)
+        except json.JSONDecodeError:
+            return []
+    return results_payload
+
+def calculate_source_metrics(results_payload, summary_text=None):
+    """Calculate credibility metrics combining coverage and trusted domains."""
+    results_list = parse_results_payload(results_payload)
+    total_count = len(results_list)
+    trusted_count = 0
+
+    for item in results_list:
+        url = (item.get('url') or '').lower()
+        if any(domain in url for domain in TRUSTED_DOMAINS):
+            trusted_count += 1
+
+    coverage_cap = MAX_RELEVANT_SOURCES if MAX_RELEVANT_SOURCES > 0 else total_count
+    coverage_raw = min(total_count, coverage_cap)
+    coverage_ratio = (coverage_raw / coverage_cap) if coverage_cap else 0
+    trust_ratio = (trusted_count / total_count) if total_count else 0
+
+    credibility_score = coverage_ratio * (1 + TRUSTED_SOURCE_WEIGHT * trust_ratio)
+    credibility_score = min(credibility_score, 1.0)
+    true_percent = int(round(credibility_score * 100))
+    false_percent = max(0, 100 - true_percent)
+
+    if summary_text:
+        summary_lower = summary_text.lower()
+        if '⚠️' in summary_text or 'unverified' in summary_lower:
+            true_percent = max(30, true_percent - 20)
+        elif '❌' in summary_text or 'no results' in summary_lower:
+            true_percent = 0
+        elif 'could not extract' in summary_lower:
+            true_percent = max(20, true_percent - 30)
+        false_percent = max(0, 100 - true_percent)
+
+    return {
+        'true_percent': true_percent,
+        'false_percent': false_percent,
+        'trusted_count': trusted_count,
+        'total_count': total_count,
+        'coverage_count': coverage_raw,
+        'coverage_ratio': coverage_ratio
+    }
+
+def persist_credibility_score(cursor, user_id, result_id, metrics):
+    """Save or update aggregated credibility score per result."""
+    if not user_id or not result_id or not metrics:
+        return
+
+    cursor.execute(
+        "SELECT article_id FROM articles WHERE result_id = %s ORDER BY article_id ASC LIMIT 1",
+        (result_id,)
+    )
+    article = cursor.fetchone()
+    if not article:
+        return
+
+    true_score = float(metrics.get('true_percent', 0))
+    false_score = float(metrics.get('false_percent', 0))
+    inconclusive_score = max(0.0, 100.0 - true_score - false_score)
+
+    cursor.execute(
+        """
+        SELECT credible_id FROM credibilityscore
+        WHERE user_id = %s AND result_id = %s
+        LIMIT 1
+        """,
+        (user_id, result_id)
+    )
+    existing = cursor.fetchone()
+
+    if existing:
+        cursor.execute(
+            """
+            UPDATE credibilityscore
+            SET article_id = %s,
+                credibilityscorefull = %s,
+                true_score = %s,
+                false_score = %s,
+                inconclusive_score = %s,
+                created_at = CURRENT_TIMESTAMP
+            WHERE credible_id = %s
+            """,
+            (
+                article['article_id'],
+                true_score,
+                true_score,
+                false_score,
+                inconclusive_score,
+                existing['credible_id']
+            )
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO credibilityscore (
+                user_id,
+                article_id,
+                result_id,
+                credibilityscorefull,
+                true_score,
+                false_score,
+                inconclusive_score
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                user_id,
+                article['article_id'],
+                result_id,
+                true_score,
+                true_score,
+                false_score,
+                inconclusive_score
+            )
+        )
+
 def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="lenroy3221",  #Change this to your own password
+        password="Corl4453",  #Change this to your own password
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -258,6 +396,8 @@ def search():
                                     VALUES (%s, %s, %s)
                                 """
                                 cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, summary_text))
+                                metrics = calculate_source_metrics(results, summary_text)
+                                persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                                 print("✅ AI summary stored successfully")
                                 
                             except Exception as summary_error:
@@ -269,6 +409,8 @@ def search():
                                     VALUES (%s, %s, %s)
                                 """
                                 cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, fallback_summary))
+                                metrics = calculate_source_metrics(results, fallback_summary)
+                                persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                     db.commit()
             except Exception as e:
                 print("❌ DB Insert Error:", e)
@@ -413,6 +555,8 @@ def api_scrape():
                             """
                         )
                         cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, summary_text))
+                        metrics = calculate_source_metrics(results, summary_text)
+                        persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                         print("✅ AI summary stored successfully (API scrape)")
                     except Exception as summary_error:
                         print(f"❌ AI Summary Error (API scrape): {summary_error}")
@@ -424,6 +568,8 @@ def api_scrape():
                             """
                         )
                         cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, fallback_summary))
+                        metrics = calculate_source_metrics(results, fallback_summary)
+                        persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
 
                 db.commit()
 
@@ -845,39 +991,20 @@ def get_chat_history():
                     search_id = search['search_id']
                     
                     # Parse search results JSON
-                    results = []
-                    if search['search_results_json']:
-                        try:
-                            results = json.loads(search['search_results_json']) if isinstance(search['search_results_json'], str) else search['search_results_json']
-                        except:
-                            results = []
+                    results = parse_results_payload(search.get('search_results_json'))
+                    metrics = calculate_source_metrics(results, search.get('summary_text'))
                     
                     # Extract sources with trust indicators
                     sources = []
-                    trusted_count = 0
                     for result in results[:5]:
                         url = result.get('url', '')
-                        is_trusted = any(domain in url for domain in [
-                            'rappler.com', 'inquirer.net', 'verafiles.org',
-                            'philstar.com', 'abs-cbn.com', 'tsek.ph', 'wikipedia.org'
-                        ])
-                        if is_trusted:
-                            trusted_count += 1
+                        is_trusted = any(domain in url for domain in TRUSTED_DOMAINS)
                         
                         sources.append({
                             'title': result.get('title', 'Untitled'),
                             'url': url,
                             'is_trusted': is_trusted
                         })
-                    
-                    # Calculate accuracy
-                    total_count = len(sources)
-                    if total_count > 0:
-                        true_percent = int((trusted_count / total_count) * 100)
-                        false_percent = 100 - true_percent
-                    else:
-                        true_percent = 0
-                        false_percent = 0
                     
                     conversations[search_id] = {
                         'search_id': search_id,
@@ -895,10 +1022,11 @@ def get_chat_history():
                                 'summary': search['summary_text'] or 'Summary not available',
                                 'sources': sources,
                                 'accuracy': {
-                                    'true_percent': true_percent,
-                                    'false_percent': false_percent,
-                                    'trusted_count': trusted_count,
-                                    'total_count': total_count
+                                    'true_percent': metrics['true_percent'],
+                                    'false_percent': metrics['false_percent'],
+                                    'trusted_count': metrics['trusted_count'],
+                                    'total_count': metrics['total_count'],
+                                    'coverage_count': metrics['coverage_count']
                                 },
                                 'result_id': search['result_id'],
                                 'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None
@@ -1024,18 +1152,15 @@ def get_bot_response(result_id):
                     return jsonify({'status': 'error', 'message': 'Response not found'}), 404
                 
                 # Parse results JSON (contains all 5 scraped articles)
-                import json
-                results = json.loads(data['results']) if isinstance(data['results'], str) else data['results']
+                results = parse_results_payload(data['results'])
+                metrics = calculate_source_metrics(results, data['summary_text'])
                 
                 # Extract top 5 sources with URLs and titles
                 sources = []
                 for result in results[:5]:
                     url = result.get('url', '#')
                     # Check if source is trusted
-                    is_trusted = any(domain in url for domain in [
-                        'rappler.com', 'inquirer.net', 'verafiles.org', 
-                        'philstar.com', 'abs-cbn.com', 'tsek.ph', 'wikipedia.org'
-                    ])
+                    is_trusted = any(domain in url for domain in TRUSTED_DOMAINS)
                     
                     sources.append({
                         'title': result.get('title') or url.split('/')[2] if url != '#' else 'Unknown Source',
@@ -1043,35 +1168,18 @@ def get_bot_response(result_id):
                         'is_trusted': is_trusted
                     })
                 
-                # Calculate accuracy based on trusted sources
-                trusted_count = sum(1 for s in sources if s['is_trusted'])
-                total_count = len(sources)
-                
-                if total_count == 0:
-                    accuracy_percent = 0
-                else:
-                    accuracy_percent = int((trusted_count / total_count) * 100)
-                
-                # Adjust accuracy based on summary warnings
-                summary_lower = data['summary_text'].lower()
-                if '⚠️' in data['summary_text'] or 'unverified' in summary_lower:
-                    accuracy_percent = max(30, accuracy_percent - 20)
-                elif '❌' in data['summary_text'] or 'no results' in summary_lower:
-                    accuracy_percent = 0
-                elif 'could not extract' in summary_lower:
-                    accuracy_percent = max(20, accuracy_percent - 30)
-                
                 return jsonify({
                     'status': 'success',
                     'query': data['query'],
                     'summary': data['summary_text'],
                     'sources': sources,
                     'accuracy': {
-                        'true_percent': accuracy_percent,
-                        'false_percent': 100 - accuracy_percent
+                        'true_percent': metrics['true_percent'],
+                        'false_percent': metrics['false_percent']
                     },
-                    'trusted_count': trusted_count,
-                    'total_count': total_count
+                    'trusted_count': metrics['trusted_count'],
+                    'total_count': metrics['total_count'],
+                    'coverage_count': metrics['coverage_count']
                 })
                 
     except Exception as e:
