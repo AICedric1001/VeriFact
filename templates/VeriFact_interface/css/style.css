@@ -1358,13 +1358,16 @@ body {
   border-radius: 10px;
   border: 1px solid var(--border);
   overflow: hidden;
+  /* Ensure accordion is always open */
+  display: block !important;
 }
 
 .bot-message .accordion-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   padding: 12px;
+  cursor: default;
 }
 
 .bot-message .accordion-toggle {
@@ -1384,16 +1387,16 @@ body {
 }
 
 .bot-message .accordion-content {
-  max-height: 0;
-  overflow: hidden;
-  padding: 0 12px;
-  transition: max-height 0.3s ease, padding 0.3s ease;
+  /* Always show content */
+  max-height: none !important;
+  padding: 12px !important;
+  overflow: visible !important;
+  display: block !important;
 }
 
-.bot-message .accordion-item.open .accordion-content {
-  max-height: calc(100vh - 140px);
-  padding: 12px;
-  overflow: visible;
+/* Hide the toggle button */
+.bot-message .accordion-toggle {
+  display: none !important;
 }
 
 /* URL with icons */
