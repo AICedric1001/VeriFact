@@ -334,7 +334,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="Corl4453",  #Change this to your own password
+        password="radgelwashere4453",  #Change this to your own password Corl4453
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -1209,20 +1209,20 @@ def get_chat_history():
                     if not search_id or search_id not in conversations:
                         continue
                     
-                        messages_to_add = [
-                            {
-                                'role': 'user',
-                                'content': chat['query_text'],
-                                'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
-                            }
-                        ]
-                        if chat.get('response_text') and chat['response_text'].strip():
-                            messages_to_add.append({
-                                'role': 'bot',
-                                'content': chat['response_text'],
-                                'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
-                            })
-                        conversations[search_id]['messages'].extend(messages_to_add)
+                    messages_to_add = [
+                        {
+                            'role': 'user',
+                            'content': chat['query_text'],
+                            'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
+                        }
+                    ]
+                    if chat.get('response_text') and chat['response_text'].strip():
+                        messages_to_add.append({
+                            'role': 'bot',
+                            'content': chat['response_text'],
+                            'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
+                        })
+                    conversations[search_id]['messages'].extend(messages_to_add)
                 
                 # Convert to list and sort by timestamp
                 conversation_list = list(conversations.values())
