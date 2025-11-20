@@ -1,5 +1,5 @@
 // Send Message
-function sendMessage() {
+function sendMessage(force = false) {
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chatBox");
   const chatInput = document.getElementById("chatInput");
@@ -29,11 +29,18 @@ function sendMessage() {
   input.style.height = "auto";
 
   // Send to backend
+  const payload = { message: message };
+  if (window.chatManager && window.chatManager.currentConversationId) {
+    payload.search_id = window.chatManager.currentConversationId;
+  } else if (force && window.chatManager && window.chatManager.pendingMessage) {
+    payload.search_id = window.chatManager.pendingMessage.search_id || null;
+  }
+
   fetch('/api/chat/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ message: message })
+    body: JSON.stringify(payload)
   })
   .then(response => response.json())
   .then(data => {
@@ -41,7 +48,7 @@ function sendMessage() {
       if (data.is_first_message) {
         const firstChatId = data.chat_id;
         // First message - set current conversation ID and trigger scraping
-        if (window.chatManager) {
+        if (window.chatManager && data.search_id) {
           window.chatManager.currentConversationId = data.search_id;
           window.chatManager.updateActiveConversation();
         }
@@ -117,26 +124,65 @@ function sendMessage() {
           showNotification('Error scraping sources. Please try again.', 'error');
         });
       } else {
-        // Follow-up message - simpler response (no scraping)
+        if (window.chatManager && data.search_id) {
+          window.chatManager.currentConversationId = data.search_id;
+          window.chatManager.updateActiveConversation();
+        }
+        // Follow-up message - reuse stored sources/summaries
         const loadingMsg = document.createElement('div');
         loadingMsg.className = 'bot-message';
-        loadingMsg.textContent = 'Generating response...';
+        loadingMsg.innerHTML = `
+          <div style="text-align:center; padding:30px;">
+            <i class="fa fa-spinner fa-spin" style="font-size:32px; color:#f9c229;"></i>
+            <p style="margin-top:15px; color:#a0adb3;">Referencing earlier findings...</p>
+          </div>
+        `;
         chatBox.appendChild(loadingMsg);
         chatBox.scrollTop = chatBox.scrollHeight;
-        
-        // Simulate AI response for follow-ups (replace with actual backend call later)
-        setTimeout(() => {
+
+        fetch('/api/chat/followup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            message: message,
+            search_id: data.search_id
+          })
+        })
+        .then(res => res.json())
+        .then(followup => {
           if (loadingMsg && loadingMsg.parentNode) {
             loadingMsg.parentNode.removeChild(loadingMsg);
           }
-          
-          const botMsg = buildSimpleBotMessage('Thank you for your follow-up question. Based on the previous sources, here\'s what I can tell you...');
-          chatBox.appendChild(botMsg);
-          chatBox.scrollTop = chatBox.scrollHeight;
-          
-          // Update chat response in database
-          updateChatResponse(data.chat_id, 'Thank you for your follow-up question. Based on the previous sources, here\'s what I can tell you...');
-        }, 1000);
+
+          if (followup.status === 'success' && followup.response) {
+            const payload = followup.response;
+            const followupText = payload.summary || payload.answer || 'No response available.';
+            const botMsg = buildFollowupBotMessage(followupText);
+            chatBox.appendChild(botMsg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            if (Array.isArray(payload.sources)) {
+              updateSourcesList(payload.sources);
+            }
+
+            updateChatResponse(data.chat_id, followupText);
+
+            if (window.chatManager) {
+              window.chatManager.loadFromServer();
+            }
+          } else {
+            console.error('Follow-up generation failed:', followup);
+            showNotification(followup.message || 'Failed to generate follow-up response', 'error');
+          }
+        })
+        .catch(err => {
+          if (loadingMsg && loadingMsg.parentNode) {
+            loadingMsg.parentNode.removeChild(loadingMsg);
+          }
+          console.error('Error generating follow-up:', err);
+          showNotification('Error generating follow-up response. Please try again.', 'error');
+        });
       }
     } else {
       console.error('Failed to save message:', data.message);
@@ -273,6 +319,16 @@ function buildSimpleBotMessage(content) {
   return botMsg;
 }
 
+function buildFollowupBotMessage(content) {
+  const botMsg = document.createElement('div');
+  botMsg.className = 'bot-message followup-message';
+  const bubble = document.createElement('div');
+  bubble.className = 'followup-bubble';
+  bubble.textContent = content;
+  botMsg.appendChild(bubble);
+  return botMsg;
+}
+
 // Generate bot responses (NEW COMPACT VERSION)
 function generateBotResponses(id, chatBox, isFirstMessage) {
   // Create one compact container instead of 5 separate ones
@@ -397,7 +453,7 @@ function loadChatHistory() {
   .then(data => {
     if (data.status === 'success') {
       // Keep the main chat panel blank on load but retain history data for future use
-      window.serverChatHistory = data.messages || [];
+      window.serverChatHistory = data.conversations || data.messages || [];
 
       const chatBox = document.getElementById('chatBox');
       if (chatBox) {

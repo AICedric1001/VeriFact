@@ -18,7 +18,7 @@ import uuid
 
 from datetime import datetime
 from werkzeug.utils import secure_filename
-from ai_summary import generate_summary_from_text
+from ai_summary import generate_summary_from_text, generate_followup_reply
 from werkzeug.security import generate_password_hash, check_password_hash
 import spacy
 import re
@@ -215,6 +215,120 @@ def persist_credibility_score(cursor, user_id, result_id, metrics):
                 inconclusive_score
             )
         )
+
+
+def get_search_context(cursor, user_id, search_id=None):
+    """Retrieve latest search/query/result context for follow-up chats."""
+    search_row = None
+    if search_id:
+        cursor.execute(
+            """
+            SELECT search_id, query_text
+            FROM searches
+            WHERE search_id = %s AND account_id = %s
+            """,
+            (search_id, user_id)
+        )
+        search_row = cursor.fetchone()
+
+    if not search_row:
+        cursor.execute(
+            """
+            SELECT search_id, query_text
+            FROM searches
+            WHERE account_id = %s
+            ORDER BY timestamp DESC
+            LIMIT 1
+            """,
+            (user_id,)
+        )
+        search_row = cursor.fetchone()
+
+    if not search_row:
+        return None
+
+    query_text = search_row['query_text']
+    cursor.execute(
+        """
+        SELECT result_id, results
+        FROM search_results
+        WHERE query = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (query_text,)
+    )
+    result_row = cursor.fetchone()
+
+    if not result_row:
+        return {
+            'search_id': search_row['search_id'],
+            'query': query_text,
+            'result_id': None,
+            'results_raw': [],
+            'sources': [],
+            'summary': None
+        }
+
+    cursor.execute(
+        """
+        SELECT summary_text
+        FROM usersummaries
+        WHERE user_id = %s AND result_id = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (user_id, result_row['result_id'])
+    )
+    summary_row = cursor.fetchone()
+
+    results_list = parse_results_payload(result_row['results'])
+    sources = []
+    for item in results_list[:5]:
+        url = item.get('url', '')
+        is_trusted = any(domain in (url or '') for domain in TRUSTED_DOMAINS)
+        sources.append({
+            'title': item.get('title', 'Untitled'),
+            'url': url,
+            'is_trusted': is_trusted
+        })
+
+    return {
+        'search_id': search_row['search_id'],
+        'query': query_text,
+        'result_id': result_row['result_id'],
+        'results_raw': results_list,
+        'sources': sources,
+        'summary': summary_row['summary_text'] if summary_row else None
+    }
+
+
+def build_followup_response(message, context, metrics):
+    """Construct a follow-up response using Gemini with stored context."""
+    try:
+        response = generate_followup_reply(
+            message,
+            context.get('summary'),
+            context.get('sources'),
+            metrics
+        )
+        if response and response.strip():
+            return response.strip()
+    except Exception as e:
+        print("⚠️ Gemini follow-up error:", e)
+
+    summary_text = context.get('summary') or "No detailed summary is available yet."
+    query = context.get('query') or 'this topic'
+    trusted = metrics.get('trusted_count', 0)
+    total = metrics.get('total_count', 0)
+    fallback = (
+        f'You asked: "{message}". '
+        f'Existing information on "{query}" says: {summary_text} '
+        f'(Credibility {metrics.get("true_percent", 0)}% with {trusted} trusted source{"s" if trusted != 1 else ""} '
+        f'out of {total}).'
+    )
+    return fallback
+
 
 def get_db_connection():
     return psycopg2.connect(
@@ -807,20 +921,35 @@ def send_chat_message():
         message = data['message'].strip()
         if not message:
             return jsonify({'status': 'error', 'message': 'Message cannot be empty'}), 400
+        provided_search_id = data.get('search_id')
         
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                # Check if there's a recent search for this user
-                check_sql = """
-                    SELECT search_id 
-                    FROM searches 
-                    WHERE account_id = %s 
-                    AND timestamp > NOW() - INTERVAL '1 hour'
-                    ORDER BY timestamp DESC 
-                    LIMIT 1
-                """
-                cursor.execute(check_sql, (session['user_db_id'],))
-                recent_search = cursor.fetchone()
+                recent_search = None
+
+                if provided_search_id:
+                    cursor.execute(
+                        """
+                        SELECT search_id, timestamp 
+                        FROM searches 
+                        WHERE search_id = %s AND account_id = %s
+                        """,
+                        (provided_search_id, session['user_db_id'])
+                    )
+                    recent_search = cursor.fetchone()
+                
+                if not recent_search:
+                    # Check if there's a recent search for this user
+                    check_sql = """
+                        SELECT search_id 
+                        FROM searches 
+                        WHERE account_id = %s 
+                        AND timestamp > NOW() - INTERVAL '1 hour'
+                        ORDER BY timestamp DESC 
+                        LIMIT 1
+                    """
+                    cursor.execute(check_sql, (session['user_db_id'],))
+                    recent_search = cursor.fetchone()
                 
                 if recent_search:
                     # Follow-up message - save to conversationHistory (no search_id column in table)
@@ -918,7 +1047,47 @@ def send_chat_message():
     except Exception as e:
         print("❌ Send chat message error:", e)
         return jsonify({'status': 'error', 'message': 'Failed to save message'}), 500
-    
+
+
+@app.route('/api/chat/followup', methods=['POST'])
+def generate_followup_message():
+    """Generate a follow-up response using stored search context."""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+
+        data = request.get_json() or {}
+        message = (data.get('message') or '').strip()
+        search_id = data.get('search_id')
+
+        if not message:
+            return jsonify({'status': 'error', 'message': 'Message is required'}), 400
+
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                context = get_search_context(cursor, session['user_db_id'], search_id)
+                if not context or not context.get('result_id'):
+                    return jsonify({'status': 'error', 'message': 'No prior search context available'}), 400
+
+                metrics = calculate_source_metrics(context.get('results_raw'), context.get('summary'))
+                response_text = build_followup_response(message, context, metrics)
+
+                payload = {
+                    'query': context.get('query'),
+                    'summary': response_text,
+                    'sources': context.get('sources'),
+                    'accuracy': metrics,
+                    'trusted_count': metrics.get('trusted_count', 0),
+                    'total_count': metrics.get('total_count', 0),
+                    'result_id': context.get('result_id')
+                }
+
+                return jsonify({'status': 'success', 'response': payload})
+
+    except Exception as e:
+        print("❌ Follow-up generation error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to generate follow-up response'}), 500
+
 # Add this enhanced endpoint to app.py, replacing the existing /api/chat/history
 
 @app.route('/api/chat/history', methods=['GET'])

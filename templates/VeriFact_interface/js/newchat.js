@@ -11,6 +11,7 @@ class ChatManager {
     this.conversations = {}; // Store by search_id
     this.currentConversationId = null;
     this.selectedConversations = new Set();
+    this.pendingMessage = null;
   }
 
   // Load conversations from server
@@ -177,6 +178,39 @@ class ChatManager {
 
     // Update active state
     this.updateActiveConversation();
+
+    if (this.pendingMessage) {
+      const { text, inputRef } = this.pendingMessage;
+      requestAnimationFrame(() => {
+    if (inputRef) {
+      inputRef.value = text;
+      inputRef.dispatchEvent(new Event('input'));
+    }
+    if (typeof sendMessage === 'function') {
+      sendMessage(true);
+    }
+        this.pendingMessage = null;
+      });
+    }
+  }
+
+  hydrateFromServerHistory(conversationsList = []) {
+    this.conversations = {};
+    conversationsList.forEach(conv => {
+      if (!conv.messages) return;
+      conv.messages = conv.messages.map(msg => {
+        if (msg.role === 'bot' && !msg.sources && msg.summary && (!msg.accuracy || msg.accuracy.total_count === 0)) {
+          return {
+            role: 'bot',
+            content: msg.summary,
+            followup: true
+          };
+        }
+        return msg;
+      });
+      this.conversations[conv.search_id] = conv;
+    });
+    this.renderChatHistory();
   }
 
   // Build bot message with full UI (summary, sources, accuracy)
@@ -494,4 +528,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     sidebarNewChatBtn.addEventListener('click', () => chatManager.newChat());
   }
 });
+
+window.chatManagerSendMessage = function(forceSend = false) {
+  const input = document.getElementById('userInput');
+  const value = input ? input.value.trim() : '';
+
+  if (!value) return;
+
+  if (chatManager && (forceSend || chatManager.currentConversationId)) {
+    if (typeof sendMessage === 'function') {
+      sendMessage(forceSend);
+    }
+  } else {
+    chatManager.pendingMessage = { text: value, inputRef: input };
+    chatManager.newChat();
+  }
+};
 

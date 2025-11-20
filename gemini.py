@@ -28,4 +28,17 @@ def summarize_with_gemini(text):
     except Exception as e:
         print("❌ Gemini API Error:", e)
         return "⚠️ Failed to generate summary."
+
+
+def respond_with_gemini(prompt):
+    """Generate a conversational response using Gemini."""
+    if not prompt or len(prompt.strip()) < 20:
+        return "⚠️ Prompt is too short to generate a meaningful response."
+
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print("❌ Gemini Chat Error:", e)
+        return "⚠️ Failed to generate follow-up response."
     
