@@ -446,40 +446,14 @@ class ChatManager {
       });
     });
 
- // Delete selected conversations with custom confirmation
+    // Delete selected functionality
     if (deleteSelectedBtn) {
-      deleteSelectedBtn.addEventListener('click', () => {
+      deleteSelectedBtn.addEventListener('click', async () => {
         if (this.selectedConversations.size === 0) return;
 
-        // Create custom confirmation dialog
-        const confirmationBox = document.createElement('div');
-        confirmationBox.className = 'custom-confirmation';
-        confirmationBox.setAttribute('role', 'dialog');
-        confirmationBox.setAttribute('aria-modal', 'true');
-        confirmationBox.innerHTML = `
-          <div class="confirmation-content">
-            <p>Are you sure you want to delete <strong>${this.selectedConversations.size}</strong> selected item(s)?</p>
-            <div class="confirmation-buttons">
-              <button class="confirm-yes">Yes</button>
-              <button class="confirm-no">No</button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(confirmationBox);
-
-        const yesBtn = confirmationBox.querySelector('.confirm-yes');
-        const noBtn = confirmationBox.querySelector('.confirm-no');
-        if (yesBtn) yesBtn.focus();
-
-        // Handle Yes button click
-        const handleYesClick = async () => {
+        if (confirm(`Delete ${this.selectedConversations.size} selected conversation(s)?`)) {
+          // Delete from server
           try {
-            // Remove event listeners
-            yesBtn.removeEventListener('click', handleYesClick);
-            if (noBtn) noBtn.removeEventListener('click', handleNoClick);
-            document.removeEventListener('keydown', escHandler);
-            
-            // Delete from server
             for (const convId of this.selectedConversations) {
               await fetch(`/api/chat/delete/${convId}`, {
                 method: 'DELETE',
@@ -495,44 +469,29 @@ class ChatManager {
               this.newChat();
             }
 
-            // Update UI
-            const deletedCount = this.selectedConversations.size;
             this.selectedConversations.clear();
             this.renderChatHistory();
             
             if (typeof showNotification === 'function') {
-              showNotification(`${deletedCount} conversation(s) deleted successfully`, 'success');
+              showNotification('Conversations deleted successfully', 'success');
             }
           } catch (error) {
             console.error('Error deleting conversations:', error);
             if (typeof showNotification === 'function') {
               showNotification('Failed to delete conversations', 'error');
             }
-          } finally {
-            confirmationBox.remove();
           }
-        };
-
-        // Handle No button click
-        const handleNoClick = () => {
-          confirmationBox.remove();
-          document.removeEventListener('keydown', escHandler);
-        };
-
-        // Close on Escape key
-        const escHandler = (e) => {
-          if (e.key === 'Escape') {
-            confirmationBox.remove();
-            document.removeEventListener('keydown', escHandler);
-          }
-        };
-
-        // Add event listeners
-        yesBtn.addEventListener('click', handleYesClick);
-        if (noBtn) noBtn.addEventListener('click', handleNoClick);
-        document.addEventListener('keydown', escHandler);
+        }
       });
     }
+  }
+
+  // Update active conversation styling
+  updateActiveConversation() {
+    document.querySelectorAll('.chat-history-item').forEach(item => {
+      const convId = parseInt(item.getAttribute('data-conversation-id'));
+      item.classList.toggle('active', convId === this.currentConversationId);
+    });
   }
 }
 

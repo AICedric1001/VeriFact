@@ -537,29 +537,49 @@ def api_scrape():
     try:
         data = request.get_json(silent=True) or request.form
         query = (data.get('query') or '').strip()
+        search_id = data.get('search_id')
+        
         if not query:
-            # If no query provided, try to load the most recent one for this user
+            # If no query provided, try to get it from search_id or most recent search
             if 'user_db_id' not in session:
                 return jsonify({'status': 'error', 'message': 'query is required'}), 400
             try:
                 with get_db_connection() as db:
                     with db.cursor() as cursor:
-                        cursor.execute(
-                            """
-                            SELECT query_text
-                            FROM searches
-                            WHERE account_id = %s
-                            ORDER BY timestamp DESC
-                            LIMIT 1
-                            """,
-                            (session['user_db_id'],)
-                        )
-                        row = cursor.fetchone()
-                        if row and row.get('query_text'):
-                            query = (row['query_text'] or '').strip()
+                        if search_id:
+                            # Get query from specific search_id
+                            cursor.execute(
+                                """
+                                SELECT query_text
+                                FROM searches
+                                WHERE search_id = %s AND account_id = %s
+                                """,
+                                (search_id, session['user_db_id'])
+                            )
+                            row = cursor.fetchone()
+                            if row and row.get('query_text'):
+                                query = (row['query_text'] or '').strip()
+                            else:
+                                return jsonify({'status': 'error', 'message': 'Search not found'}), 404
                         else:
-                            return jsonify({'status': 'error', 'message': 'query is required'}), 400
-            except Exception:
+                            # Get query from most recent search
+                            cursor.execute(
+                                """
+                                SELECT query_text
+                                FROM searches
+                                WHERE account_id = %s
+                                ORDER BY timestamp DESC
+                                LIMIT 1
+                                """,
+                                (session['user_db_id'],)
+                            )
+                            row = cursor.fetchone()
+                            if row and row.get('query_text'):
+                                query = (row['query_text'] or '').strip()
+                            else:
+                                return jsonify({'status': 'error', 'message': 'query is required'}), 400
+            except Exception as e:
+                print(f"❌ Error getting query: {e}")
                 return jsonify({'status': 'error', 'message': 'query is required'}), 400
 
         serpapi_key = data.get('serpapi_key') or os.getenv("SERPAPI_API_KEY") or "b78924b4496d3e2abba8b33f9e89fa5eb443f8e5ba0db605c98b5b6bae37e50c"
@@ -1507,17 +1527,17 @@ def delete_conversation(search_id):
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 # Verify ownership
-                cursor.execute("""
-                    SELECT search_id FROM searches 
-                    WHERE search_id = %s AND account_id = %s
-                """, (search_id, session['user_db_id']))
+                cursor.execute(
+                """INSERT INTO "conversationHistory" (user_id, search_id, query_text, response_text)
+                   VALUES (%s, %s, %s, %s)""",
+                (session['user_db_id'], search_id, '', ''))
                 
                 if not cursor.fetchone():
                     return jsonify({'status': 'error', 'message': 'Conversation not found'}), 404
                 
-                # Get the search query text to match chat messages
+                # Get the search timestamp to match chat messages by time window
                 cursor.execute("""
-                    SELECT query_text FROM searches 
+                    SELECT timestamp FROM searches 
                     WHERE search_id = %s AND account_id = %s
                 """, (search_id, session['user_db_id']))
                 search_data = cursor.fetchone()
@@ -1525,18 +1545,40 @@ def delete_conversation(search_id):
                 if not search_data:
                     return jsonify({'status': 'error', 'message': 'Conversation not found'}), 404
                 
-                query_text = search_data['query_text']
+                search_timestamp = search_data['timestamp']
                 
                 # Delete related categories
                 cursor.execute("""
                     DELETE FROM categories WHERE search_id = %s
                 """, (search_id,))
                 
-                # Delete related chat messages (match by query_text since conversationHistory has no search_id)
+                # Delete related chat messages - match by timestamp window (chats created after this search and before next search)
+                # First, get the next search timestamp (if any)
                 cursor.execute("""
-                    DELETE FROM "conversationHistory" 
-                    WHERE user_id = %s AND query_text = %s
-                """, (session['user_db_id'], query_text))
+                    SELECT timestamp FROM searches 
+                    WHERE account_id = %s 
+                    AND timestamp > %s
+                    ORDER BY timestamp ASC
+                    LIMIT 1
+                """, (session['user_db_id'], search_timestamp))
+                next_search = cursor.fetchone()
+                next_timestamp = next_search['timestamp'] if next_search else None
+                
+                # Delete conversationHistory entries that match this search by timestamp window
+                if next_timestamp:
+                    cursor.execute("""
+                        DELETE FROM "conversationHistory" 
+                        WHERE user_id = %s 
+                        AND timestamp >= %s 
+                        AND timestamp < %s
+                    """, (session['user_db_id'], search_timestamp, next_timestamp))
+                else:
+                    # If this is the most recent search, delete all chats after this search timestamp
+                    cursor.execute("""
+                        DELETE FROM "conversationHistory" 
+                        WHERE user_id = %s 
+                        AND timestamp >= %s
+                    """, (session['user_db_id'], search_timestamp))
                 
                 # Delete the search itself
                 cursor.execute("""
