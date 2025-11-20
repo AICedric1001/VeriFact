@@ -126,8 +126,19 @@ def assign_user():
         except Exception as e:
             print("❌ Error getting user id:", e)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/landing')
+def landing():
+    """Render the landing page."""
+    return render_template('VeriFact_interface/landing.html')
+
+@app.route('/')
 def index():
+    """Redirect root to landing page."""
+    return redirect('/landing')
+
+@app.route('/search', methods=['GET', 'POST'])
+def search():
+    """Handle search functionality."""
     results = []
     
     if request.method == 'POST':

@@ -21,7 +21,7 @@
                     <a href="#features" class="nav-link">Features</a>
                     <a href="#how-verifact-works" class="nav-link">How It Works</a>
                     <a href="#about" class="nav-link">About</a>
-                    <a href="#" class="navbar-signin">
+                    <a href="{{ url_for('auth_page') }}" class="navbar-signin">
                         Sign In
                     </a>
                 </div>
@@ -43,7 +43,7 @@
             
             <!-- Start Detecting Button -->
             <div class="start-detecting">
-                <a href="home.html" class="detect-btn">
+                <a href="{{ url_for('home') }}" class="detect-btn">
                     <i class="fas fa-comments"></i>
                     Start Chatting
                 </a>
@@ -442,7 +442,7 @@
                 <a href="#features">Features</a>
                 <a href="#how-verifact-works">How It Works</a>
                 <a href="#about">About</a>
-                <a href="#" class="mobile-menu-signin">
+                <a href="{{ url_for('auth_page') }}" class="mobile-menu-signin">
                     Sign In
                 </a>
             </nav>
