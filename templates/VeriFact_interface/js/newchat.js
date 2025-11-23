@@ -381,6 +381,17 @@ class ChatManager {
     this.attachCheckboxListeners();
   }
 
+  updateActiveConversation() {
+  document.querySelectorAll('.chat-history-item').forEach(item => {
+    const itemId = parseInt(item.getAttribute('data-conversation-id'));
+    if (itemId === this.currentConversationId) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
   // Attach click handlers to history items
   attachHistoryItemListeners() {
     document.querySelectorAll('.chat-history-item').forEach(item => {
