@@ -334,7 +334,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="radgelwashere4453",  #Change this to your own password Corl4453
+        password="Corl4453",  #Change this to your own password Corl4453
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -927,6 +927,8 @@ def get_specific_summary(summary_id):
         return jsonify({'status': 'error', 'message': 'Failed to retrieve summary'}), 500
 
 # -------- Chat Endpoints --------
+# In app.py, replace the /api/chat/send endpoint with this fixed version:
+
 @app.route('/api/chat/send', methods=['POST'])
 def send_chat_message():
     """Save a chat message to the database"""
@@ -972,14 +974,15 @@ def send_chat_message():
                     recent_search = cursor.fetchone()
                 
                 if recent_search:
-                    # Follow-up message - save to conversationHistory (no search_id column in table)
+                    # Follow-up message - save to conversationHistory WITH search_id
                     insert_sql = """
-                        INSERT INTO "conversationHistory" (user_id, query_text, response_text) 
-                        VALUES (%s, %s, %s) 
+                        INSERT INTO "conversationHistory" (user_id, search_id, query_text, response_text) 
+                        VALUES (%s, %s, %s, %s) 
                         RETURNING chat_id, timestamp
                     """
-                    cursor.execute(insert_sql, (session['user_db_id'], message, ''))
+                    cursor.execute(insert_sql, (session['user_db_id'], recent_search['search_id'], message, ''))
                     result = cursor.fetchone()
+                    
                     # Extract categories from the user message and store in categories table
                     try:
                         chat_categories = extract_categories_from_search(message)
@@ -1008,7 +1011,7 @@ def send_chat_message():
                         'is_first_message': False
                     })
                 else:
-                    # First message - check if search already exists for this query (within last 5 minutes)
+                    # First message - create new search
                     check_first_search_sql = """
                         SELECT search_id, timestamp FROM searches 
                         WHERE account_id = %s 
@@ -1028,14 +1031,15 @@ def send_chat_message():
                         cursor.execute(insert_sql, (session['user_db_id'], message))
                         result = cursor.fetchone()
                     
-                    # Save the first user message to conversationHistory as well
+                    # Save the first user message to conversationHistory WITH search_id
                     insert_chat_sql = """
-                        INSERT INTO "conversationHistory" (user_id, query_text, response_text)
-                        VALUES (%s, %s, %s)
+                        INSERT INTO "conversationHistory" (user_id, search_id, query_text, response_text)
+                        VALUES (%s, %s, %s, %s)
                         RETURNING chat_id, timestamp
                     """
-                    cursor.execute(insert_chat_sql, (session['user_db_id'], message, ''))
+                    cursor.execute(insert_chat_sql, (session['user_db_id'], result['search_id'], message, ''))
                     chat_entry = cursor.fetchone()
+                    
                     # Extract categories from the user message and store in categories table
                     try:
                         chat_categories = extract_categories_from_search(message)
@@ -1110,6 +1114,8 @@ def generate_followup_message():
 
 # Add this enhanced endpoint to app.py, replacing the existing /api/chat/history
 
+# Complete updated /api/chat/history endpoint
+
 @app.route('/api/chat/history', methods=['GET'])
 def get_chat_history():
     """Get enriched chat history with summaries, sources, and accuracy data"""
@@ -1138,7 +1144,7 @@ def get_chat_history():
                 cursor.execute(search_query, (session['user_db_id'],))
                 searches = cursor.fetchall()
                 
-                # Get all follow-up chat messages
+                # Get all follow-up chat messages (now with direct search_id column)
                 chat_query = """
                     SELECT
                         'chat' AS type,
@@ -1146,25 +1152,7 @@ def get_chat_history():
                         ch.query_text,
                         ch.response_text,
                         ch.timestamp,
-                        COALESCE(
-                            (
-                                SELECT s.search_id
-                                FROM searches s
-                                WHERE s.account_id = ch.user_id
-                                  AND ch.timestamp IS NOT NULL
-                                  AND s.timestamp IS NOT NULL
-                                  AND s.timestamp <= ch.timestamp
-                                ORDER BY s.timestamp DESC
-                                LIMIT 1
-                            ),
-                            (
-                                SELECT s2.search_id
-                                FROM searches s2
-                                WHERE s2.account_id = ch.user_id
-                                ORDER BY s2.timestamp DESC NULLS LAST
-                                LIMIT 1
-                            )
-                        ) AS search_id
+                        ch.search_id
                     FROM "conversationHistory" ch
                     WHERE ch.user_id = %s
                     ORDER BY ch.timestamp ASC
@@ -1199,7 +1187,7 @@ def get_chat_history():
                         'search_id': search_id,
                         'title': search['query_text'][:60] + ('...' if len(search['query_text']) > 60 else ''),
                         'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None,
-                        'search_query': search['query_text'],  # Store for duplicate detection
+                        'search_query': search['query_text'],
                         'messages': [
                             {
                                 'role': 'user',
@@ -1224,16 +1212,10 @@ def get_chat_history():
                         ]
                     }
                 
-                # Add follow-up chats to their respective conversations using the derived search_id
+                # Add follow-up chats to their respective conversations using the direct search_id
                 for chat in chats:
                     search_id = chat.get('search_id')
                     if not search_id or search_id not in conversations:
-                        continue
-                    
-                    # Skip chat messages that match the search query text (to avoid duplicating the initial message)
-                    search_query = conversations[search_id].get('search_query', '')
-                    if chat['query_text'].strip().lower() == search_query.strip().lower():
-                        # This is the initial search message, already represented by the search
                         continue
                     
                     messages_to_add = [
@@ -1265,6 +1247,146 @@ def get_chat_history():
         import traceback
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': 'Failed to retrieve chat history'}), 500
+    """Save a chat message to the database"""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+        
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({'status': 'error', 'message': 'Message is required'}), 400
+        
+        message = data['message'].strip()
+        if not message:
+            return jsonify({'status': 'error', 'message': 'Message cannot be empty'}), 400
+        provided_search_id = data.get('search_id')
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                recent_search = None
+
+                if provided_search_id:
+                    cursor.execute(
+                        """
+                        SELECT search_id, timestamp 
+                        FROM searches 
+                        WHERE search_id = %s AND account_id = %s
+                        """,
+                        (provided_search_id, session['user_db_id'])
+                    )
+                    recent_search = cursor.fetchone()
+                
+                if not recent_search:
+                    # Check if there's a recent search for this user
+                    check_sql = """
+                        SELECT search_id 
+                        FROM searches 
+                        WHERE account_id = %s 
+                        AND timestamp > NOW() - INTERVAL '1 hour'
+                        ORDER BY timestamp DESC 
+                        LIMIT 1
+                    """
+                    cursor.execute(check_sql, (session['user_db_id'],))
+                    recent_search = cursor.fetchone()
+                
+                if recent_search:
+                    # Follow-up message - save to conversationHistory WITH search_id
+                    insert_sql = """
+                        INSERT INTO "conversationHistory" (user_id, search_id, query_text, response_text) 
+                        VALUES (%s, %s, %s, %s) 
+                        RETURNING chat_id, timestamp
+                    """
+                    cursor.execute(insert_sql, (session['user_db_id'], recent_search['search_id'], message, ''))
+                    result = cursor.fetchone()
+                    
+                    # Extract categories from the user message and store in categories table
+                    try:
+                        chat_categories = extract_categories_from_search(message)
+                        normalized_seen = set()
+                        for category in chat_categories:
+                            normalized = re.sub(r"\s+", " ", (category or "").strip().lower())
+                            if not normalized or normalized in normalized_seen:
+                                continue
+                            normalized_seen.add(normalized)
+                            # Check if category already exists for THIS search_id to prevent duplicates within same search
+                            check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
+                            cursor.execute(check_sql, (recent_search['search_id'], normalized))
+                            existing = cursor.fetchone()
+                            if not existing:
+                                insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
+                                cursor.execute(insert_category_sql, (recent_search['search_id'], normalized, 'SEARCH_KEYWORD'))
+                    except Exception as cat_err:
+                        print("⚠️ Chat category extract/insert error:", cat_err)
+                    db.commit()
+                    
+                    return jsonify({
+                        'status': 'success',
+                        'chat_id': result['chat_id'],
+                        'search_id': recent_search['search_id'],
+                        'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
+                        'is_first_message': False
+                    })
+                else:
+                    # First message - create new search
+                    check_first_search_sql = """
+                        SELECT search_id, timestamp FROM searches 
+                        WHERE account_id = %s 
+                        AND query_text = %s 
+                        AND timestamp > NOW() - INTERVAL '5 minutes'
+                        ORDER BY timestamp DESC 
+                        LIMIT 1
+                    """
+                    cursor.execute(check_first_search_sql, (session['user_db_id'], message))
+                    existing_first_search = cursor.fetchone()
+                    
+                    if existing_first_search:
+                        result = existing_first_search
+                    else:
+                        # Insert into searches table only if it doesn't exist
+                        insert_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id, timestamp"
+                        cursor.execute(insert_sql, (session['user_db_id'], message))
+                        result = cursor.fetchone()
+                    
+                    # Save the first user message to conversationHistory WITH search_id
+                    insert_chat_sql = """
+                        INSERT INTO "conversationHistory" (user_id, search_id, query_text, response_text)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING chat_id, timestamp
+                    """
+                    cursor.execute(insert_chat_sql, (session['user_db_id'], result['search_id'], message, ''))
+                    chat_entry = cursor.fetchone()
+                    
+                    # Extract categories from the user message and store in categories table
+                    try:
+                        chat_categories = extract_categories_from_search(message)
+                        normalized_seen = set()
+                        for category in chat_categories:
+                            normalized = re.sub(r"\s+", " ", (category or "").strip().lower())
+                            if not normalized or normalized in normalized_seen:
+                                continue
+                            normalized_seen.add(normalized)
+                            # Check if category already exists for THIS search_id to prevent duplicates within same search
+                            check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
+                            cursor.execute(check_sql, (result['search_id'], normalized))
+                            existing = cursor.fetchone()
+                            if not existing:
+                                insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
+                                cursor.execute(insert_category_sql, (result['search_id'], normalized, 'SEARCH_KEYWORD'))
+                    except Exception as cat_err:
+                        print("⚠️ First-message category extract/insert error:", cat_err)
+                    db.commit()
+                    
+                    return jsonify({
+                        'status': 'success',
+                        'search_id': result['search_id'],
+                        'chat_id': chat_entry['chat_id'],
+                        'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
+                        'is_first_message': True
+                    })
+                
+    except Exception as e:
+        print("❌ Send chat message error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to save message'}), 500
 
 @app.route('/api/chat/update/<int:chat_id>', methods=['PUT'])
 def update_chat_response(chat_id):
