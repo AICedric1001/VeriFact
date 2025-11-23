@@ -141,9 +141,17 @@ def main_system(query, api_key=None, use_trusted_sources=True):
     
     # Set up site filtering if requested
     site_filter = None
-    # Don't use restrictive site filter - get results from all sources
-    # We'll filter out Wikipedia and prioritize trusted sources after getting results
-    print(f"🏛️  Getting results from all sources (excluding Wikipedia)")
+
+    if use_trusted_sources:
+        # Use only the non-checked sources (rappler.com, inquirer.net, verafiles.org)
+        site_filter = [
+            "https://www.verafiles.org/",
+            "https://www.rappler.com/",
+            "https://www.inquirer.net/",
+            "https://www.abs-cbn.com/",
+            ""
+        ]
+        print(f"🏛️  Using trusted sources filter: {site_filter}")
 
     # Choose search method
     try:

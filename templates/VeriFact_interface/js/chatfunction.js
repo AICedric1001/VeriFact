@@ -240,13 +240,7 @@ function buildRichBotMessage(data) {
           </div>
 
           <hr>
-          <strong>Key Findings:</strong>
-          <ul class="resp-keyfindings">
-            <li>${data.trusted_count} out of ${data.total_count} sources are from verified outlets</li>
-            <li>${data.total_count - data.trusted_count} unverified source${data.total_count - data.trusted_count !== 1 ? 's' : ''}</li>
-            ${data.accuracy.true_percent >= 80 ? '<li style="color:#4caf50;">High confidence in information accuracy</li>' : ''}
-            ${data.accuracy.true_percent < 50 ? '<li style="color:#e53935;">⚠️ Exercise caution - limited verified sources</li>' : ''}
-          </ul>
+         
         </div>
       </div>
     </div>
@@ -842,13 +836,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
   
                 <hr>
-                <strong>Key Findings:</strong>
-                <ul class="resp-keyfindings">
-                  <li>${data.trusted_count} out of ${data.total_count} sources are from verified outlets</li>
-                  <li>${data.total_count - data.trusted_count} unverified source${data.total_count - data.trusted_count !== 1 ? 's' : ''}</li>
-                  ${data.accuracy.true_percent >= 80 ? '<li style="color:#4caf50;">High confidence in information accuracy</li>' : ''}
-                  ${data.accuracy.true_percent < 50 ? '<li style="color:#e53935;">⚠️ Exercise caution - limited verified sources</li>' : ''}
-                </ul>
+               
               </div>
             </div>
           </div>

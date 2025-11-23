@@ -264,13 +264,7 @@ class ChatManager {
               </div>
 
               <hr>
-              <strong>Key Findings:</strong>
-              <ul class="resp-keyfindings">
-                <li>${messageData.accuracy.trusted_count} out of ${messageData.accuracy.total_count} sources are from verified outlets</li>
-                <li>${messageData.accuracy.total_count - messageData.accuracy.trusted_count} unverified source${messageData.accuracy.total_count - messageData.accuracy.trusted_count !== 1 ? 's' : ''}</li>
-                ${messageData.accuracy.true_percent >= 80 ? '<li style="color:#4caf50;">High confidence in information accuracy</li>' : ''}
-                ${messageData.accuracy.true_percent < 50 ? '<li style="color:#e53935;">⚠️ Exercise caution - limited verified sources</li>' : ''}
-              </ul>
+             
             </div>
           </div>
         </div>
