@@ -45,10 +45,9 @@ def search_serpapi(query, api_key=None, site_filter=None):
         "engine": "google",
         "q": search_query,
         "api_key": effective_key,
-        "num": 10,  # Explicitly request 10 results
+        "num": 20,  # Request more results to ensure we get 5 unique domains
         "gl": "us",  # Country code
         "hl": "en",  # Language
-        # We will slice to top 5 below to be explicit regardless of API defaults
     }
 
     try:
@@ -78,9 +77,9 @@ def search_serpapi(query, api_key=None, site_filter=None):
             if 'answer_box' in results:
                 print(f"🔧 Answer box: {results['answer_box']}")
 
-        # Return structured results for top 5: title and link
+        # Return structured results (get more to ensure unique domains)
         top_results = []
-        for res in organic[:5]:
+        for res in organic[:20]:  # Get up to 20 results to filter for unique domains
             link = res.get('link') or res.get('url')
             title = res.get('title')
             if link:
@@ -168,13 +167,13 @@ def main_system(query, api_key=None, use_trusted_sources=True):
             print("🧭 Using basic Google search fallback…")
             # Try new signature; if unsupported, fall back to older 'num_results'
             try:
-                # Increased pause time to avoid rate limiting
-                urls = list(search(search_query, tld="com", lang="en", num=10, stop=5, pause=3.0))
+                # Increased pause time to avoid rate limiting, get more results for unique domain filtering
+                urls = list(search(search_query, tld="com", lang="en", num=20, stop=20, pause=3.0))
                 print(f"🔍 Google search returned {len(urls)} URLs")
             except TypeError:
                 # Older googlesearch versions use 'num_results'
                 try:
-                    urls = list(search(search_query, num_results=5, pause=3.0))
+                    urls = list(search(search_query, num_results=20, pause=3.0))
                     print(f"🔍 Google search (legacy) returned {len(urls)} URLs")
                 except Exception as e:
                     print(f"❌ Google search failed: {e}")
@@ -202,14 +201,14 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                     "engine": "google",
                     "q": search_query,
                     "api_key": effective_key,
-                    "num": 5,
+                    "num": 20,  # Request more results for unique domain filtering
                     "gl": "uk",  # Try different country
                     "hl": "en",
                 }
                 search_instance = GoogleSearch(params)
                 results = search_instance.get_dict()
                 if 'organic_results' in results:
-                    organic = results.get('organic_results', [])[:5]
+                    organic = results.get('organic_results', [])[:20]
                     links_with_meta = []
                     for res in organic:
                         link = res.get('link') or res.get('url')
@@ -221,7 +220,7 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                 print("🧭 Retrying Google search with different parameters...")
                 # Try with different search parameters
                 try:
-                    urls = list(search(search_query, tld="co.uk", lang="en", num=5, stop=5, pause=4.0))
+                    urls = list(search(search_query, tld="co.uk", lang="en", num=20, stop=20, pause=4.0))
                     links_with_meta = [{"title": None, "url": url} for url in urls]
                     print(f"🔄 Alternative Google search returned {len(urls)} URLs")
                 except Exception as e:
@@ -242,7 +241,7 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                     "engine": "google",
                     "q": search_query,  # Original query without site filter
                     "api_key": effective_key,
-                    "num": 10,
+                    "num": 20,  # Request more results for unique domain filtering
                     "gl": "us",
                     "hl": "en",
                 }
@@ -250,7 +249,7 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                 results = search_instance.get_dict()
                 
                 if 'organic_results' in results:
-                    organic = results.get('organic_results', [])[:5]
+                    organic = results.get('organic_results', [])[:20]
                     links_with_meta = []
                     for res in organic:
                         link = res.get('link') or res.get('url')
@@ -261,7 +260,7 @@ def main_system(query, api_key=None, use_trusted_sources=True):
             else:
                 print("🧭 Retrying Google search without trusted sources filter...")
                 try:
-                    urls = list(search(search_query, tld="com", lang="en", num=10, stop=5, pause=3.0))
+                    urls = list(search(search_query, tld="com", lang="en", num=20, stop=20, pause=3.0))
                     links_with_meta = [{"title": None, "url": url} for url in urls]
                     print(f"✅ Fallback Google search returned {len(urls)} URLs from all sources")
                 except Exception as e:
@@ -275,34 +274,90 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         print(f"🔧 Debug - API key available: {bool(api_key or os.getenv('SERPAPI_API_KEY'))}")
         print(f"🔧 Debug - Using SerpAPI: {bool(api_key or os.getenv('SERPAPI_API_KEY'))}")
 
-    # Filter out Wikipedia and prioritize trusted sources
+    # Filter out Wikipedia and ensure unique domains (one result per site)
+    def extract_domain(url):
+        """Extract the main domain from a URL"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url.lower())
+            domain = parsed.netloc.replace("www.", "").split(":")[0]
+            # Remove subdomains that aren't www (e.g., news.rappler.com -> rappler.com)
+            parts = domain.split(".")
+            if len(parts) > 2:
+                # Check if it's a known subdomain pattern or keep the main domain
+                # For now, keep the last two parts (e.g., rappler.com)
+                domain = ".".join(parts[-2:])
+            return domain
+        except Exception:
+            return None
+    
     filtered_links = []
+    seen_domains = set()
     trusted_links = []
     other_links = []
     
+    # First pass: separate trusted and other sources
     for item in links_with_meta:
-        url = item.get("url", "").lower()
+        url = item.get("url", "")
+        if not url:
+            continue
+            
+        url_lower = url.lower()
         # Exclude Wikipedia
-        if "wikipedia.org" in url or "wikipedia.com" in url:
-            print(f"🚫 Excluding Wikipedia: {item.get('url')}")
+        if "wikipedia.org" in url_lower or "wikipedia.com" in url_lower:
+            print(f"🚫 Excluding Wikipedia: {url}")
+            continue
+        
+        # Extract domain
+        domain = extract_domain(url)
+        if not domain:
             continue
         
         # Check if it's a trusted source
         is_trusted = False
         for trusted_domain in FILTERED_DOMAINS:
-            domain = trusted_domain.replace("https://", "").replace("http://", "").replace("www.", "").rstrip("/")
-            if domain in url:
+            trusted_domain_clean = trusted_domain.replace("https://", "").replace("http://", "").replace("www.", "").rstrip("/")
+            if trusted_domain_clean in url_lower:
                 is_trusted = True
                 break
         
+        # Add domain info to item for later use
+        item_with_domain = item.copy()
+        item_with_domain['_domain'] = domain
+        item_with_domain['_is_trusted'] = is_trusted
+        
         if is_trusted:
-            trusted_links.append(item)
+            trusted_links.append(item_with_domain)
         else:
-            other_links.append(item)
+            other_links.append(item_with_domain)
     
-    # Prioritize trusted sources, but include others too
-    filtered_links = trusted_links + other_links
-    print(f"✅ Filtered to {len(filtered_links)} links ({len(trusted_links)} trusted, {len(other_links)} other sources)")
+    # Second pass: select unique domains, prioritizing trusted sources
+    # First, add trusted sources (one per domain)
+    for item in trusted_links:
+        domain = item.get('_domain')
+        if domain and domain not in seen_domains:
+            seen_domains.add(domain)
+            # Remove internal tracking fields before adding
+            item.pop('_domain', None)
+            item.pop('_is_trusted', None)
+            filtered_links.append(item)
+            if len(filtered_links) >= 5:
+                break
+    
+    # Then, add other sources (one per domain) until we have 5 total
+    if len(filtered_links) < 5:
+        for item in other_links:
+            domain = item.get('_domain')
+            if domain and domain not in seen_domains:
+                seen_domains.add(domain)
+                # Remove internal tracking fields before adding
+                item.pop('_domain', None)
+                item.pop('_is_trusted', None)
+                filtered_links.append(item)
+                if len(filtered_links) >= 5:
+                    break
+    
+    print(f"✅ Filtered to {len(filtered_links)} unique domain links from {len(seen_domains)} different sites")
 
     results = []
     for idx, item in enumerate(filtered_links[:5], start=1):
