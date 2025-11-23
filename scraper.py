@@ -141,15 +141,9 @@ def main_system(query, api_key=None, use_trusted_sources=True):
     
     # Set up site filtering if requested
     site_filter = None
-    if use_trusted_sources:
-        # Use only the non-checked sources (rappler.com, inquirer.net, verafiles.org)
-        site_filter = [
-            "https://www.rappler.com/",
-            "https://www.inquirer.net/",
-            "https://www.verafiles.org/",
-            "https://www.wikipedia.org/"
-        ]
-        print(f"🏛️  Using trusted sources filter: {site_filter}")
+    # Don't use restrictive site filter - get results from all sources
+    # We'll filter out Wikipedia and prioritize trusted sources after getting results
+    print(f"🏛️  Getting results from all sources (excluding Wikipedia)")
 
     # Choose search method
     try:
@@ -195,25 +189,10 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                 # Try with different country/language settings
                 effective_key = api_key or os.getenv("SERPAPI_API_KEY") or os.getenv("SERPAPI_KEY")
                 
-                # Build search query with site filter if provided
-                retry_query = search_query
-                if site_filter:
-                    if isinstance(site_filter, list):
-                        site_domains = []
-                        for site in site_filter:
-                            if site.startswith('https://'):
-                                domain = site.replace('https://', '').replace('http://', '').rstrip('/')
-                                site_domains.append(f"site:{domain}")
-                        if site_domains:
-                            retry_query = f"{search_query} ({' OR '.join(site_domains)})"
-                    else:
-                        if site_filter.startswith('https://'):
-                            domain = site_filter.replace('https://', '').replace('http://', '').rstrip('/')
-                            retry_query = f"{search_query} site:{domain}"
-                
+                # Use original query without site filter
                 params = {
                     "engine": "google",
-                    "q": retry_query,
+                    "q": search_query,
                     "api_key": effective_key,
                     "num": 5,
                     "gl": "uk",  # Try different country
@@ -288,8 +267,37 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         print(f"🔧 Debug - API key available: {bool(api_key or os.getenv('SERPAPI_API_KEY'))}")
         print(f"🔧 Debug - Using SerpAPI: {bool(api_key or os.getenv('SERPAPI_API_KEY'))}")
 
+    # Filter out Wikipedia and prioritize trusted sources
+    filtered_links = []
+    trusted_links = []
+    other_links = []
+    
+    for item in links_with_meta:
+        url = item.get("url", "").lower()
+        # Exclude Wikipedia
+        if "wikipedia.org" in url or "wikipedia.com" in url:
+            print(f"🚫 Excluding Wikipedia: {item.get('url')}")
+            continue
+        
+        # Check if it's a trusted source
+        is_trusted = False
+        for trusted_domain in FILTERED_DOMAINS:
+            domain = trusted_domain.replace("https://", "").replace("http://", "").replace("www.", "").rstrip("/")
+            if domain in url:
+                is_trusted = True
+                break
+        
+        if is_trusted:
+            trusted_links.append(item)
+        else:
+            other_links.append(item)
+    
+    # Prioritize trusted sources, but include others too
+    filtered_links = trusted_links + other_links
+    print(f"✅ Filtered to {len(filtered_links)} links ({len(trusted_links)} trusted, {len(other_links)} other sources)")
+
     results = []
-    for idx, item in enumerate(links_with_meta[:5], start=1):
+    for idx, item in enumerate(filtered_links[:5], start=1):
         url = item.get("url")
         title = item.get("title")
         if not url:

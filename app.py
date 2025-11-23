@@ -43,8 +43,7 @@ TRUSTED_DOMAINS = [
     'verafiles.org',
     'philstar.com',
     'abs-cbn.com',
-    'tsek.ph',
-    'wikipedia.org'
+    'tsek.ph'
 ]
 MAX_RELEVANT_SOURCES = int(os.getenv("VERIFACT_MAX_RELEVANT_SOURCES", "12"))
 TRUSTED_SOURCE_WEIGHT = float(os.getenv("VERIFACT_TRUSTED_SOURCE_WEIGHT", "0.25"))
