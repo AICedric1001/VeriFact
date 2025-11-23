@@ -47,6 +47,7 @@ class ChatManager {
     }
   }
 
+ 
   // Start a new chat
   async newChat() {
     // Save current conversation if it exists and has messages
@@ -72,8 +73,11 @@ class ChatManager {
       sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
     }
 
-    // Reset to null (will be set when first message is sent)
+    // **CRITICAL: Reset to null so a NEW search is created on first message**
     this.currentConversationId = null;
+    
+    // Clear pending message
+    this.pendingMessage = null;
 
     // Reset chat input to centered
     const chatInput = document.getElementById('chatInput');
@@ -85,12 +89,15 @@ class ChatManager {
       const textarea = chatInput.querySelector('textarea');
       if (textarea) {
         textarea.value = '';
+        textarea.style.height = 'auto';
         textarea.focus();
       }
     }
 
-    // Update active state in sidebar
+    // Update active state in sidebar (deselect all)
     this.updateActiveConversation();
+    
+    console.log('✅ New chat started - currentConversationId reset to:', this.currentConversationId);
   }
 
   // Save current conversation (called before switching or creating new)

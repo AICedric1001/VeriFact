@@ -339,7 +339,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="radgelwashere4453",  #Change this to your own password Corl4453
+        password="Corl4453",  #Change this to your own password Corl4453
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -934,7 +934,7 @@ def get_specific_summary(summary_id):
 # -------- Chat Endpoints --------
 @app.route('/api/chat/send', methods=['POST'])
 def send_chat_message():
-    """Save a chat message to the database"""
+    """Save a chat message to the database, ensuring search_id is linked to conversationHistory."""
     try:
         if 'user_db_id' not in session:
             return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
@@ -952,7 +952,9 @@ def send_chat_message():
             with db.cursor() as cursor:
                 recent_search = None
 
+                # 1. Try to find the provided search_id or the most recent active search
                 if provided_search_id:
+                    # Look up the provided search_id
                     cursor.execute(
                         """
                         SELECT search_id, timestamp 
@@ -964,7 +966,7 @@ def send_chat_message():
                     recent_search = cursor.fetchone()
                 
                 if not recent_search:
-                    # Check if there's a recent search for this user
+                    # If no valid ID was provided, check for a recent search for this user (last hour)
                     check_sql = """
                         SELECT search_id 
                         FROM searches 
@@ -976,15 +978,24 @@ def send_chat_message():
                     cursor.execute(check_sql, (session['user_db_id'],))
                     recent_search = cursor.fetchone()
                 
+                
                 if recent_search:
-                    # Follow-up message - save to conversationHistory (no search_id column in table)
+                    # ==========================================================
+                    # PATH A: FOLLOW-UP MESSAGE
+                    # We have an existing search_id to link the conversation to.
+                    # ==========================================================
+                    
+                    search_id_to_use = recent_search['search_id']
+                    
+                    # FIX: Include search_id in the conversationHistory insert
                     insert_sql = """
-                        INSERT INTO "conversationHistory" (user_id, query_text, response_text) 
-                        VALUES (%s, %s, %s) 
+                        INSERT INTO "conversationHistory" (user_id, search_id, query_text, response_text) 
+                        VALUES (%s, %s, %s, %s) 
                         RETURNING chat_id, timestamp
                     """
-                    cursor.execute(insert_sql, (session['user_db_id'], message, ''))
+                    cursor.execute(insert_sql, (session['user_db_id'], search_id_to_use, message, ''))
                     result = cursor.fetchone()
+                    
                     # Extract categories from the user message and store in categories table
                     try:
                         chat_categories = extract_categories_from_search(message)
@@ -996,24 +1007,29 @@ def send_chat_message():
                             normalized_seen.add(normalized)
                             # Check if category already exists for THIS search_id to prevent duplicates within same search
                             check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
-                            cursor.execute(check_sql, (recent_search['search_id'], normalized))
+                            cursor.execute(check_sql, (search_id_to_use, normalized))
                             existing = cursor.fetchone()
                             if not existing:
                                 insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
-                                cursor.execute(insert_category_sql, (recent_search['search_id'], normalized, 'SEARCH_KEYWORD'))
+                                cursor.execute(insert_category_sql, (search_id_to_use, normalized, 'SEARCH_KEYWORD'))
                     except Exception as cat_err:
                         print("⚠️ Chat category extract/insert error:", cat_err)
+                        
                     db.commit()
                     
                     return jsonify({
                         'status': 'success',
                         'chat_id': result['chat_id'],
-                        'search_id': recent_search['search_id'],
+                        'search_id': search_id_to_use,
                         'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
                         'is_first_message': False
                     })
                 else:
-                    # First message - check if search already exists for this query (within last 5 minutes)
+                    # ==========================================================
+                    # PATH B: FIRST MESSAGE (starting a new search conversation)
+                    # ==========================================================
+                    
+                    # Check if a new search was already created for this query recently
                     check_first_search_sql = """
                         SELECT search_id, timestamp FROM searches 
                         WHERE account_id = %s 
@@ -1028,19 +1044,23 @@ def send_chat_message():
                     if existing_first_search:
                         result = existing_first_search
                     else:
-                        # Insert into searches table only if it doesn't exist
+                        # Insert a new search into the searches table
                         insert_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id, timestamp"
                         cursor.execute(insert_sql, (session['user_db_id'], message))
                         result = cursor.fetchone()
                     
-                    # Save the first user message to conversationHistory as well
+                    search_id_to_use = result['search_id']
+                    
+                    # Save the first user message to conversationHistory
+                    # FIX: Include search_id in the conversationHistory insert
                     insert_chat_sql = """
-                        INSERT INTO "conversationHistory" (user_id, query_text, response_text)
-                        VALUES (%s, %s, %s)
+                        INSERT INTO "conversationHistory" (user_id, search_id, query_text, response_text)
+                        VALUES (%s, %s, %s, %s)
                         RETURNING chat_id, timestamp
                     """
-                    cursor.execute(insert_chat_sql, (session['user_db_id'], message, ''))
+                    cursor.execute(insert_chat_sql, (session['user_db_id'], search_id_to_use, message, ''))
                     chat_entry = cursor.fetchone()
+                    
                     # Extract categories from the user message and store in categories table
                     try:
                         chat_categories = extract_categories_from_search(message)
@@ -1052,18 +1072,19 @@ def send_chat_message():
                             normalized_seen.add(normalized)
                             # Check if category already exists for THIS search_id to prevent duplicates within same search
                             check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
-                            cursor.execute(check_sql, (result['search_id'], normalized))
+                            cursor.execute(check_sql, (search_id_to_use, normalized))
                             existing = cursor.fetchone()
                             if not existing:
                                 insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
-                                cursor.execute(insert_category_sql, (result['search_id'], normalized, 'SEARCH_KEYWORD'))
+                                cursor.execute(insert_category_sql, (search_id_to_use, normalized, 'SEARCH_KEYWORD'))
                     except Exception as cat_err:
                         print("⚠️ First-message category extract/insert error:", cat_err)
+                        
                     db.commit()
                     
                     return jsonify({
                         'status': 'success',
-                        'search_id': result['search_id'],
+                        'search_id': search_id_to_use,
                         'chat_id': chat_entry['chat_id'],
                         'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
                         'is_first_message': True

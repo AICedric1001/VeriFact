@@ -482,6 +482,43 @@ const textarea = document.querySelector('.chat-input textarea');
           return res.json().then(function(json) { return { ok: res.ok, json: json }; });
         }).then(function(result) {
           if (result.ok) {
+            // Clear chat manager state
+            if (window.chatManager) {
+              window.chatManager.conversations = {};
+              window.chatManager.currentConversationId = null;
+              window.chatManager.selectedConversations.clear();
+              window.chatManager.pendingMessage = null;
+            }
+            
+            // Clear chat UI
+            const chatBox = document.getElementById('chatBox');
+            if (chatBox) chatBox.innerHTML = '';
+            
+            // Show empty state
+            const emptyState = document.querySelector('.empty-state');
+            if (emptyState) emptyState.style.display = 'flex';
+            
+            // Reset chat input
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+              chatInput.classList.remove('bottom');
+              chatInput.classList.add('centered');
+              const textarea = chatInput.querySelector('textarea');
+              if (textarea) textarea.value = '';
+            }
+            
+            // Clear sources
+            const sourcesList = document.getElementById('sourcesList');
+            if (sourcesList) {
+              sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
+            }
+            
+            // Clear sidebar
+            const chatHistory = document.querySelector('.chat-history');
+            if (chatHistory) {
+              chatHistory.innerHTML = '<div class="no-chats">No chat history</div>';
+            }
+            
             // Reset username display
             const userDisplayName = document.getElementById('userDisplayName');
             if (userDisplayName) {
