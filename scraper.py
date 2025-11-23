@@ -134,25 +134,15 @@ def main_system(query, api_key=None, use_trusted_sources=True):
     print(f"⏱️  Waiting {delay:.1f}s to avoid rate limiting...")
     time.sleep(delay)
     
-    # Use the original query for now to debug
+    # Use the original query
     search_query = query
-    print(f"🔍 Using original query: {search_query}")
+    print(f"🔍 Using query: {search_query}")
     
-    # Set up site filtering if requested
-    site_filter = None
+    # Search ALL sources (not just trusted) to get both verified and unverified sites
+    # We'll categorize them later based on FILTERED_DOMAINS
+    print("🌐 Searching all sources (verified and unverified)...")
 
-    if use_trusted_sources:
-        # Use only the non-checked sources (rappler.com, inquirer.net, verafiles.org)
-        site_filter = [
-            "https://www.verafiles.org/",
-            "https://www.rappler.com/",
-            "https://www.inquirer.net/",
-            "https://www.abs-cbn.com/",
-            ""
-        ]
-        print(f"🏛️  Using trusted sources filter: {site_filter}")
-
-    # Choose search method
+    # Choose search method - search ALL sources, not filtered
     try:
         has_api_key = api_key or os.getenv("SERPAPI_API_KEY")
         print(f"🔧 Debug - has_api_key: {has_api_key}")
@@ -160,8 +150,9 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         print(f"🔧 Debug - env SERPAPI_API_KEY: {os.getenv('SERPAPI_API_KEY')}")
         
         if has_api_key:
-            print("🛰️  Using SerpAPI for search…")
-            top_results = search_serpapi(search_query, api_key, site_filter)
+            print("🛰️  Using SerpAPI for search (all sources)...")
+            # Search WITHOUT site filter to get all sources
+            top_results = search_serpapi(search_query, api_key, site_filter=None)
             links_with_meta = top_results  # list of dicts with title, url
         else:
             print("🧭 Using basic Google search fallback…")
@@ -228,20 +219,19 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         except Exception as e:
             print(f"❌ Alternative search failed: {e}")
 
-    # If no results found from trusted sources, fallback to searching all sources
-    if len(links_with_meta) == 0 and use_trusted_sources and site_filter:
-        print("⚠️  No results from trusted sources. Falling back to searching all sources...")
+    # If still no results, try one more time without any filters
+    if len(links_with_meta) == 0:
+        print("⚠️  No results found. Retrying search...")
         try:
             if api_key or os.getenv("SERPAPI_API_KEY"):
-                print("🛰️  Retrying SerpAPI without trusted sources filter...")
+                print("🛰️  Retrying SerpAPI...")
                 effective_key = api_key or os.getenv("SERPAPI_API_KEY") or os.getenv("SERPAPI_KEY")
                 
-                # Search without site filter
                 params = {
                     "engine": "google",
-                    "q": search_query,  # Original query without site filter
+                    "q": search_query,
                     "api_key": effective_key,
-                    "num": 20,  # Request more results for unique domain filtering
+                    "num": 20,
                     "gl": "us",
                     "hl": "en",
                 }
@@ -256,17 +246,17 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                         title = res.get('title')
                         if link:
                             links_with_meta.append({"title": title, "url": link})
-                    print(f"✅ Fallback search returned {len(links_with_meta)} results from all sources")
+                    print(f"✅ Retry search returned {len(links_with_meta)} results")
             else:
-                print("🧭 Retrying Google search without trusted sources filter...")
+                print("🧭 Retrying Google search...")
                 try:
                     urls = list(search(search_query, tld="com", lang="en", num=20, stop=20, pause=3.0))
                     links_with_meta = [{"title": None, "url": url} for url in urls]
-                    print(f"✅ Fallback Google search returned {len(urls)} URLs from all sources")
+                    print(f"✅ Retry Google search returned {len(urls)} URLs")
                 except Exception as e:
-                    print(f"❌ Fallback Google search failed: {e}")
+                    print(f"❌ Retry Google search failed: {e}")
         except Exception as e:
-            print(f"❌ Fallback search failed: {e}")
+            print(f"❌ Retry search failed: {e}")
 
     print(f"🔗 Found {len(links_with_meta)} links")
     if len(links_with_meta) == 0:
@@ -331,41 +321,51 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         else:
             other_links.append(item_with_domain)
     
-    # Second pass: select unique domains, prioritizing trusted sources
-    # First, add trusted sources (one per domain)
+    print(f"📊 Found {len(trusted_links)} trusted links and {len(other_links)} unverified links")
+    
+    # Second pass: select unique domains, prioritizing trusted sources but including unverified
+    # First, add trusted sources (one per domain) - get up to 5 verified
     for item in trusted_links:
         domain = item.get('_domain')
         if domain and domain not in seen_domains:
             seen_domains.add(domain)
-            # Remove internal tracking fields before adding
+            # Keep verification status, remove internal tracking field
+            is_trusted = item.get('_is_trusted', False)
             item.pop('_domain', None)
             item.pop('_is_trusted', None)
+            item['verified'] = True  # Mark as verified
+            item['is_trusted'] = is_trusted  # Keep for backward compatibility
             filtered_links.append(item)
-            if len(filtered_links) >= 5:
+            if len([x for x in filtered_links if x.get('verified')]) >= 5:
+                break  # Stop when we have 5 verified sources
+    
+    # Then, add unverified sources (one per domain) - get up to 5 more (10 total)
+    for item in other_links:
+        domain = item.get('_domain')
+        if domain and domain not in seen_domains:
+            seen_domains.add(domain)
+            # Mark as unverified
+            item.pop('_domain', None)
+            item.pop('_is_trusted', None)
+            item['verified'] = False  # Mark as unverified
+            item['is_trusted'] = False
+            filtered_links.append(item)
+            if len(filtered_links) >= 10:  # Get up to 10 total (5 verified + 5 unverified)
                 break
     
-    # Then, add other sources (one per domain) until we have 5 total
-    if len(filtered_links) < 5:
-        for item in other_links:
-            domain = item.get('_domain')
-            if domain and domain not in seen_domains:
-                seen_domains.add(domain)
-                # Remove internal tracking fields before adding
-                item.pop('_domain', None)
-                item.pop('_is_trusted', None)
-                filtered_links.append(item)
-                if len(filtered_links) >= 5:
-                    break
-    
-    print(f"✅ Filtered to {len(filtered_links)} unique domain links from {len(seen_domains)} different sites")
+    verified_count = len([x for x in filtered_links if x.get('verified')])
+    unverified_count = len([x for x in filtered_links if not x.get('verified')])
+    print(f"✅ Filtered to {len(filtered_links)} unique domain links ({verified_count} verified, {unverified_count} unverified)")
 
     results = []
-    for idx, item in enumerate(filtered_links[:5], start=1):
+    for idx, item in enumerate(filtered_links, start=1):
         url = item.get("url")
         title = item.get("title")
+        verified = item.get("verified", False)
         if not url:
             continue
-        print(f"\n[{idx}/5] ▶️  Fetching article")
+        status = "✅ Verified" if verified else "⚠️  Unverified"
+        print(f"\n[{idx}/{len(filtered_links)}] ▶️  Fetching article {status}: {url}")
         content = extract_article_text(url)
         if content and len(content.strip()) > 50:
             print("  🧠 Running NER…")
@@ -375,14 +375,18 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                 "title": title,
                 "url": url,
                 "content": content,
-                "entities": analysis
+                "entities": analysis,
+                "verified": verified,  # Add verification status
+                "is_trusted": item.get("is_trusted", verified)  # Backward compatibility
             })
         else:
             print("  ⏭️  Skipped: insufficient content")
 
-    print(f"✅ Completed. Articles kept: {len(results)}")
-    # Ensure max 5
-    return results[:5]
+    verified_results = len([r for r in results if r.get('verified')])
+    unverified_results = len([r for r in results if not r.get('verified')])
+    print(f"✅ Completed. Articles kept: {len(results)} ({verified_results} verified, {unverified_results} unverified)")
+    # Return all results (both verified and unverified)
+    return results
 
 # --- User Input and Output ---
 if __name__ == "__main__":
