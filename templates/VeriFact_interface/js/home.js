@@ -612,6 +612,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Add Enter key functionality to send message
+textarea.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); // Prevent new line
+        const sendEvent = new Event('click');
+        sendBtn.dispatchEvent(sendEvent); // Trigger the send button click
+    }
+});
+
   // ensure sync at startup
   syncChatInputHeight();
 });
