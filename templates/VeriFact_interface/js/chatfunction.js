@@ -1,10 +1,11 @@
 // Send Message
+
 function sendMessage(force = false) {
   const input = document.getElementById("userInput");
   const chatBox = document.getElementById("chatBox");
   const chatInput = document.getElementById("chatInput");
 
-  if (input.value.trim() === "") return;
+  if (!input || input.value.trim() === "") return;
 
   const message = input.value.trim();
   
@@ -15,8 +16,10 @@ function sendMessage(force = false) {
   }
   
   // Move chat input to bottom
-  chatInput.classList.remove("centered");
-  chatInput.classList.add("bottom");
+  if (chatInput) {
+    chatInput.classList.remove("centered");
+    chatInput.classList.add("bottom");
+  }
 
   // Display user message
   const userMsg = document.createElement("div");
@@ -28,31 +31,42 @@ function sendMessage(force = false) {
   input.value = "";
   input.style.height = "auto";
 
-  // Send to backend
+  // Prepare payload
   const payload = { message: message };
   if (window.chatManager && window.chatManager.currentConversationId) {
     payload.search_id = window.chatManager.currentConversationId;
-  } else if (force && window.chatManager && window.chatManager.pendingMessage) {
-    payload.search_id = window.chatManager.pendingMessage.search_id || null;
   }
 
+  console.log('📤 Sending message with payload:', payload);
+
+  // Send to backend
   fetch('/api/chat/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
     body: JSON.stringify(payload)
   })
-  .then(response => response.json())
+  .then(response => {
+    console.log('📥 Response status:', response.status);
+    return response.json();
+  })
   .then(data => {
-      if (data.status === 'success') {
-      if (data.is_first_message) {
-        const firstChatId = data.chat_id;
-        // First message - set current conversation ID and trigger scraping
-        if (window.chatManager && data.search_id) {
-          window.chatManager.currentConversationId = data.search_id;
+    console.log('📥 Response data:', data);
+    
+    if (data.status === 'success') {
+      // Update conversation ID
+      if (window.chatManager && data.search_id) {
+        window.chatManager.currentConversationId = data.search_id;
+        if (typeof window.chatManager.updateActiveConversation === 'function') {
           window.chatManager.updateActiveConversation();
         }
+      }
+
+      if (data.is_first_message) {
+        console.log('🆕 First message - triggering scrape');
+        const firstChatId = data.chat_id;
         
+        // Show loading indicator
         const loadingMsg = document.createElement('div');
         loadingMsg.className = 'bot-message';
         loadingMsg.innerHTML = `
@@ -64,25 +78,43 @@ function sendMessage(force = false) {
         chatBox.appendChild(loadingMsg);
         chatBox.scrollTop = chatBox.scrollHeight;
 
+        // Trigger scraping with the message as query
         fetch('/api/scrape', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({})  // Query is pulled from latest search
+          body: JSON.stringify({ 
+            query: message,
+            search_id: data.search_id 
+          })
         })
-        .then(res => res.json())
+        .then(res => {
+          console.log('📥 Scrape response status:', res.status);
+          return res.json();
+        })
         .then(scrape => {
+          console.log('📥 Scrape data:', scrape);
+          
+          // Remove loading message
           if (loadingMsg && loadingMsg.parentNode) {
             loadingMsg.parentNode.removeChild(loadingMsg);
           }
+          
           if (scrape && scrape.status === 'success') {
+            console.log('✅ Scrape successful, fetching bot response for result_id:', scrape.result_id);
+            
             // Fetch and display bot response
             fetch(`/api/get-bot-response/${scrape.result_id}`, {
               method: 'GET',
               credentials: 'same-origin'
             })
-            .then(response => response.json())
+            .then(response => {
+              console.log('📥 Bot response status:', response.status);
+              return response.json();
+            })
             .then(botData => {
+              console.log('📥 Bot data:', botData);
+              
               if (botData.status === 'success') {
                 // Build rich bot message
                 const botMsg = buildRichBotMessage(botData);
@@ -94,41 +126,45 @@ function sendMessage(force = false) {
                 }
                 
                 // Update sources panel
-                updateSourcesList(botData.sources);
+                if (typeof updateSourcesList === 'function') {
+                  updateSourcesList(botData.sources);
+                }
                 
                 // Refresh trending topics
-                loadTrendingTopics();
+                if (typeof loadTrendingTopics === 'function') {
+                  loadTrendingTopics();
+                }
                 
-                // Reload conversations to show new one in sidebar
-                if (window.chatManager) {
+                // Reload conversations
+                if (window.chatManager && typeof window.chatManager.loadFromServer === 'function') {
                   window.chatManager.loadFromServer();
                 }
               } else {
-                showNotification('Failed to generate response', 'error');
+                console.error('❌ Bot response error:', botData);
+                showNotification('Failed to generate response: ' + (botData.message || 'Unknown error'), 'error');
               }
             })
             .catch(err => {
-              console.error('Error fetching bot response:', err);
+              console.error('❌ Error fetching bot response:', err);
               showNotification('Error generating response', 'error');
             });
           } else {
-            console.error('Scrape failed:', scrape);
-            showNotification('Failed to scrape sources. Please try again.', 'error');
+            console.error('❌ Scrape failed:', scrape);
+            showNotification('Failed to scrape sources: ' + (scrape.message || 'Unknown error'), 'error');
           }
         })
         .catch(err => {
+          console.error('❌ Error triggering scrape:', err);
           if (loadingMsg && loadingMsg.parentNode) {
             loadingMsg.parentNode.removeChild(loadingMsg);
           }
-          console.error('Error triggering scrape:', err);
           showNotification('Error scraping sources. Please try again.', 'error');
         });
+        
       } else {
-        if (window.chatManager && data.search_id) {
-          window.chatManager.currentConversationId = data.search_id;
-          window.chatManager.updateActiveConversation();
-        }
-        // Follow-up message - reuse stored sources/summaries
+        console.log('💬 Follow-up message - generating response');
+        
+        // Show loading indicator
         const loadingMsg = document.createElement('div');
         loadingMsg.className = 'bot-message';
         loadingMsg.innerHTML = `
@@ -151,6 +187,8 @@ function sendMessage(force = false) {
         })
         .then(res => res.json())
         .then(followup => {
+          console.log('📥 Followup data:', followup);
+          
           if (loadingMsg && loadingMsg.parentNode) {
             loadingMsg.parentNode.removeChild(loadingMsg);
           }
@@ -162,38 +200,46 @@ function sendMessage(force = false) {
             chatBox.appendChild(botMsg);
             chatBox.scrollTop = chatBox.scrollHeight;
 
-            if (Array.isArray(payload.sources)) {
+            if (Array.isArray(payload.sources) && typeof updateSourcesList === 'function') {
               updateSourcesList(payload.sources);
             }
 
             updateChatResponse(data.chat_id, followupText);
 
-            if (window.chatManager) {
+            if (window.chatManager && typeof window.chatManager.loadFromServer === 'function') {
               window.chatManager.loadFromServer();
             }
           } else {
-            console.error('Follow-up generation failed:', followup);
+            console.error('❌ Follow-up generation failed:', followup);
             showNotification(followup.message || 'Failed to generate follow-up response', 'error');
           }
         })
         .catch(err => {
+          console.error('❌ Error generating follow-up:', err);
           if (loadingMsg && loadingMsg.parentNode) {
             loadingMsg.parentNode.removeChild(loadingMsg);
           }
-          console.error('Error generating follow-up:', err);
           showNotification('Error generating follow-up response. Please try again.', 'error');
         });
       }
     } else {
-      console.error('Failed to save message:', data.message);
-      showNotification('Failed to save message. Please try again.', 'error');
+      console.error('❌ Failed to save message:', data.message);
+      showNotification('Failed to save message: ' + (data.message || 'Unknown error'), 'error');
     }
   })
   .catch(error => {
-    console.error('Error sending message:', error);
-    showNotification('Error sending message. Please try again.', 'error');
+    console.error('❌ Error sending message:', error);
+    showNotification('Error sending message: ' + error.message, 'error');
   });
 }
+
+
+
+
+
+
+
+
 
 // Helper to build rich bot message with summary, sources, and accuracy
 function buildRichBotMessage(data) {
