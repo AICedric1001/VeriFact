@@ -1,7 +1,9 @@
-from flask import Flask, render_template, request, redirect, session, jsonify, send_from_directory, Response
+from flask import Flask, render_template, request, redirect, session, jsonify, send_from_directory, Response, flash
 import psycopg2
 import psycopg2.extras
 from scraper import main_system, search_serpapi
+from admin_routes import admin_bp  # Import the admin Blueprint
+from admin.users import users_bp as admin_users_bp  # Import the admin users Blueprint
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -19,10 +21,27 @@ from ai_summary import generate_summary_from_text
 from werkzeug.security import generate_password_hash, check_password_hash
 import spacy
 import re
+from functools import wraps
+from datetime import datetime, timedelta, timezone
+from template_filters import time_ago, format_datetime
 
 app = Flask(__name__)
 
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback-insecure-dev-key")
+# Register template filters
+app.jinja_env.filters['time_ago'] = time_ago
+app.jinja_env.filters['datetimeformat'] = format_datetime
+
+app.config.update(
+    SECRET_KEY=os.getenv("FLASK_SECRET_KEY", "fallback-insecure-dev-key"),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SECURE=False,  # Set to True in production with HTTPS
+    PERMANENT_SESSION_LIFETIME=1800,  # 30 minutes
+    SESSION_COOKIE_SAMESITE='Lax'
+)
+
+# Register blueprints
+app.register_blueprint(admin_bp)
+app.register_blueprint(admin_users_bp, url_prefix='/admin')
 
 # Load SpaCy model for category extraction
 try:
@@ -80,9 +99,9 @@ def extract_categories_from_search(search_text):
 
 def get_db_connection():
     return psycopg2.connect(
-        host="localhost",
+        host="127.0.0.1",  # Force IPv4
         user="postgres",
-        password="lenroy3221",  #Change this to your own password
+        password="123",  # Updated password to match db_utils.py
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
