@@ -196,8 +196,16 @@
                     <button class="icon-btn" type="button" aria-label="Close" data-close><i class="fa fa-times"></i></button>
                 </div>
                 <div class="modal-body">
-                    <div class="modal-meta" style="margin-bottom:12px; display:flex; gap:8px; align-items:center;">
-                        <button id="archiveClearAll" class="btn-secondary" type="button">Clear All</button>
+                    <div class="modal-meta" style="margin-bottom:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                        <div class="archive-actions" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <button id="archiveClearAll" class="btn-secondary" type="button">Clear All</button>
+                            <label class="archive-select-all" for="archiveSelectAll" style="display:flex; align-items:center; gap:4px;">
+                                <input type="checkbox" id="archiveSelectAll" />
+                                <span>Select all</span>
+                            </label>
+                            <button id="archiveExportSelected" class="btn-primary" type="button" disabled>Export Selected (.doc)</button>
+                            <button id="archiveExportAll" class="btn-primary" type="button">Export All (.doc)</button>
+                        </div>
                         <div style="flex:1"></div>
                         <span class="sr-only">Archived responses list</span>
                         <div class="search-box">

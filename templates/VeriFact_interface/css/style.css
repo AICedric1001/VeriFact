@@ -1909,6 +1909,36 @@ body {
   display: block;
 }
 
+#archiveModal .archive-actions {
+  width: 100%;
+}
+
+#archiveModal .archive-actions button {
+  white-space: nowrap;
+}
+
+#archiveModal .archive-select-all {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+#archiveModal .archive-select-all input {
+  width: 16px;
+  height: 16px;
+}
+
+#archiveModal .archive-select-wrapper {
+  display: flex;
+  align-items: center;
+  margin-right: 8px;
+}
+
+#archiveModal .archive-select {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 .modal .modal-meta {
   display: flex;
   justify-content: flex-end;

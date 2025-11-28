@@ -277,6 +277,9 @@ class ChatManager {
         </div>
       `;
 
+      const sourcesForArchive = Array.isArray(messageData.sources) ? messageData.sources : [];
+      botMsg._sourcesForArchive = sourcesForArchive;
+
       // Wire up accordion toggle
       const toggleBtn = botMsg.querySelector('.accordion-toggle');
       const accordionItem = botMsg.querySelector('.accordion-item');
@@ -298,7 +301,7 @@ class ChatManager {
         saveBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (typeof saveResponseToArchive === 'function') {
-            saveResponseToArchive(botMsg);
+            saveResponseToArchive(botMsg, sourcesForArchive);
           }
           saveBtn.classList.add('saved');
           saveBtn.title = 'Saved';

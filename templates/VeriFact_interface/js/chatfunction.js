@@ -245,6 +245,9 @@ function sendMessage(force = false) {
 function buildRichBotMessage(data) {
   const botMsg = document.createElement('div');
   botMsg.className = 'bot-message';
+
+  const sourcesForArchive = Array.isArray(data.sources) ? data.sources : [];
+  botMsg._sourcesForArchive = sourcesForArchive;
   
   botMsg.innerHTML = `
     <div class="accordion-item" open>
@@ -312,7 +315,7 @@ function buildRichBotMessage(data) {
   if (saveBtn) {
     saveBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      saveResponseToArchive(botMsg);
+      saveResponseToArchive(botMsg, sourcesForArchive);
       saveBtn.classList.add('saved');
       saveBtn.title = 'Saved';
       showNotification('Saved response to Archive', 'success');
@@ -416,7 +419,9 @@ function generateBotResponses(id, chatBox, isFirstMessage) {
     chatBox.appendChild(botMsg);
     chatBox.scrollTop = chatBox.scrollHeight; // auto scroll
     const responseTopic = botMsg.querySelector('.resp-title-text')?.textContent || 'analysis';
-    updateSourcesList(buildSourcesForTopic(responseTopic));
+    const generatedSources = buildSourcesForTopic(responseTopic);
+    updateSourcesList(generatedSources);
+    botMsg._sourcesForArchive = generatedSources;
 
     // Enable toggle for this accordion
     const toggleBtn = botMsg.querySelector(".accordion-toggle");
@@ -436,7 +441,7 @@ function generateBotResponses(id, chatBox, isFirstMessage) {
     if (saveBtn) {
       saveBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        saveResponseToArchive(botMsg);
+        saveResponseToArchive(botMsg, generatedSources);
         // mark as saved
         saveBtn.classList.add('saved');
         saveBtn.title = 'Saved';
@@ -542,15 +547,28 @@ function loadUserInfo() {
       if (userDisplayName) {
         userDisplayName.textContent = data.user.username;
       }
+      if (typeof window.setArchiveUserContext === 'function') {
+        const uuid = data.user.uuid || (data.user.id ? `user-${data.user.id}` : null);
+        window.setArchiveUserContext(uuid || 'guest');
+      }
+      window.__verifactCurrentUsername = data.user.username || '';
     } else {
       // User not logged in or error occurred
       console.log('User not logged in or error:', data.message);
+      if (typeof window.setArchiveUserContext === 'function') {
+        window.setArchiveUserContext('guest');
+      }
+      window.__verifactCurrentUsername = '';
       // Keep "Sign In" as default
     }
   })
   .catch(error => {
     console.error('Error loading user info:', error);
     // Keep "Sign In" as default on error
+    if (typeof window.setArchiveUserContext === 'function') {
+      window.setArchiveUserContext('guest');
+    }
+    window.__verifactCurrentUsername = '';
   });
 }
 
@@ -831,8 +849,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Convert sources to format for sources panel with trust indicators
         const sourcesForPanel = data.sources.map((source) => {
           return {
-            label: source.title, // Keep label for backward compatibility
-            title: source.title,  // Also pass title explicitly for formatting
+            label: source.title,
+            title: source.title,
             url: source.url,
             is_trusted: source.is_trusted
           };
@@ -840,6 +858,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update sources panel with scraped sources
         updateSourcesList(sourcesForPanel);
+        botMsg._sourcesForArchive = sourcesForPanel;
 
         botMsg.innerHTML = `
           <div class="accordion-item">
@@ -909,7 +928,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (saveBtn) {
           saveBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            saveResponseToArchive(botMsg);
+            saveResponseToArchive(botMsg, sourcesForPanel);
             saveBtn.classList.add('saved');
             saveBtn.title = 'Saved';
             showNotification('Saved response to Archive', 'success');
