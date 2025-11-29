@@ -5,12 +5,21 @@ from dotenv import load_dotenv
 # Load .env file
 load_dotenv()
 
+# --- TEMPORARY DIAGNOSTIC LINE ---
+if os.getenv("GEMINI_API_KEY"):
+    print("✅ API Key loaded successfully.")
+else:
+    print("❌ ERROR: GEMINI_API_KEY is NOT set in the environment.")
+
+
 # Configure API key
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Correct model instantiation
 model = genai.GenerativeModel("models/gemini-2.0-flash")  # NOTE: full path with "models/"
 # You can also use: "models/gemini-pro" or just check with genai.list_models()
+
+
 
 def summarize_with_gemini(text):
     if not text or len(text.strip()) < 100:
@@ -28,4 +37,17 @@ def summarize_with_gemini(text):
     except Exception as e:
         print("❌ Gemini API Error:", e)
         return "⚠️ Failed to generate summary."
+
+
+def respond_with_gemini(prompt):
+    """Generate a conversational response using Gemini."""
+    if not prompt or len(prompt.strip()) < 20:
+        return "⚠️ Prompt is too short to generate a meaningful response."
+
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        print("❌ Gemini Chat Error:", e)
+        return "⚠️ Failed to generate follow-up response."
     

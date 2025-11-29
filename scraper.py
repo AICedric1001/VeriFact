@@ -45,10 +45,9 @@ def search_serpapi(query, api_key=None, site_filter=None):
         "engine": "google",
         "q": search_query,
         "api_key": effective_key,
-        "num": 10,  # Explicitly request 10 results
+        "num": 20,  # Request more results to ensure we get 5 unique domains
         "gl": "us",  # Country code
         "hl": "en",  # Language
-        # We will slice to top 5 below to be explicit regardless of API defaults
     }
 
     try:
@@ -78,9 +77,9 @@ def search_serpapi(query, api_key=None, site_filter=None):
             if 'answer_box' in results:
                 print(f"🔧 Answer box: {results['answer_box']}")
 
-        # Return structured results for top 5: title and link
+        # Return structured results (get more to ensure unique domains)
         top_results = []
-        for res in organic[:5]:
+        for res in organic[:20]:  # Get up to 20 results to filter for unique domains
             link = res.get('link') or res.get('url')
             title = res.get('title')
             if link:
@@ -135,23 +134,15 @@ def main_system(query, api_key=None, use_trusted_sources=True):
     print(f"⏱️  Waiting {delay:.1f}s to avoid rate limiting...")
     time.sleep(delay)
     
-    # Use the original query for now to debug
+    # Use the original query
     search_query = query
-    print(f"🔍 Using original query: {search_query}")
+    print(f"🔍 Using query: {search_query}")
     
-    # Set up site filtering if requested
-    site_filter = None
-    if use_trusted_sources:
-        # Use only the non-checked sources (rappler.com, inquirer.net, verafiles.org)
-        site_filter = [
-            "https://www.rappler.com/",
-            "https://www.inquirer.net/",
-            "https://www.verafiles.org/",
-            "https://www.wikipedia.org/"
-        ]
-        print(f"🏛️  Using trusted sources filter: {site_filter}")
+    # Search ALL sources (not just trusted) to get both verified and unverified sites
+    # We'll categorize them later based on FILTERED_DOMAINS
+    print("🌐 Searching all sources (verified and unverified)...")
 
-    # Choose search method
+    # Choose search method - search ALL sources, not filtered
     try:
         has_api_key = api_key or os.getenv("SERPAPI_API_KEY")
         print(f"🔧 Debug - has_api_key: {has_api_key}")
@@ -159,20 +150,21 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         print(f"🔧 Debug - env SERPAPI_API_KEY: {os.getenv('SERPAPI_API_KEY')}")
         
         if has_api_key:
-            print("🛰️  Using SerpAPI for search…")
-            top_results = search_serpapi(search_query, api_key, site_filter)
+            print("🛰️  Using SerpAPI for search (all sources)...")
+            # Search WITHOUT site filter to get all sources
+            top_results = search_serpapi(search_query, api_key, site_filter=None)
             links_with_meta = top_results  # list of dicts with title, url
         else:
             print("🧭 Using basic Google search fallback…")
             # Try new signature; if unsupported, fall back to older 'num_results'
             try:
-                # Increased pause time to avoid rate limiting
-                urls = list(search(search_query, tld="com", lang="en", num=10, stop=5, pause=3.0))
+                # Increased pause time to avoid rate limiting, get more results for unique domain filtering
+                urls = list(search(search_query, tld="com", lang="en", num=20, stop=20, pause=3.0))
                 print(f"🔍 Google search returned {len(urls)} URLs")
             except TypeError:
                 # Older googlesearch versions use 'num_results'
                 try:
-                    urls = list(search(search_query, num_results=5, pause=3.0))
+                    urls = list(search(search_query, num_results=20, pause=3.0))
                     print(f"🔍 Google search (legacy) returned {len(urls)} URLs")
                 except Exception as e:
                     print(f"❌ Google search failed: {e}")
@@ -195,34 +187,19 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                 # Try with different country/language settings
                 effective_key = api_key or os.getenv("SERPAPI_API_KEY") or os.getenv("SERPAPI_KEY")
                 
-                # Build search query with site filter if provided
-                retry_query = search_query
-                if site_filter:
-                    if isinstance(site_filter, list):
-                        site_domains = []
-                        for site in site_filter:
-                            if site.startswith('https://'):
-                                domain = site.replace('https://', '').replace('http://', '').rstrip('/')
-                                site_domains.append(f"site:{domain}")
-                        if site_domains:
-                            retry_query = f"{search_query} ({' OR '.join(site_domains)})"
-                    else:
-                        if site_filter.startswith('https://'):
-                            domain = site_filter.replace('https://', '').replace('http://', '').rstrip('/')
-                            retry_query = f"{search_query} site:{domain}"
-                
+                # Use original query without site filter
                 params = {
                     "engine": "google",
-                    "q": retry_query,
+                    "q": search_query,
                     "api_key": effective_key,
-                    "num": 5,
+                    "num": 20,  # Request more results for unique domain filtering
                     "gl": "uk",  # Try different country
                     "hl": "en",
                 }
                 search_instance = GoogleSearch(params)
                 results = search_instance.get_dict()
                 if 'organic_results' in results:
-                    organic = results.get('organic_results', [])[:5]
+                    organic = results.get('organic_results', [])[:20]
                     links_with_meta = []
                     for res in organic:
                         link = res.get('link') or res.get('url')
@@ -234,7 +211,7 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                 print("🧭 Retrying Google search with different parameters...")
                 # Try with different search parameters
                 try:
-                    urls = list(search(search_query, tld="co.uk", lang="en", num=5, stop=5, pause=4.0))
+                    urls = list(search(search_query, tld="co.uk", lang="en", num=20, stop=20, pause=4.0))
                     links_with_meta = [{"title": None, "url": url} for url in urls]
                     print(f"🔄 Alternative Google search returned {len(urls)} URLs")
                 except Exception as e:
@@ -242,20 +219,19 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         except Exception as e:
             print(f"❌ Alternative search failed: {e}")
 
-    # If no results found from trusted sources, fallback to searching all sources
-    if len(links_with_meta) == 0 and use_trusted_sources and site_filter:
-        print("⚠️  No results from trusted sources. Falling back to searching all sources...")
+    # If still no results, try one more time without any filters
+    if len(links_with_meta) == 0:
+        print("⚠️  No results found. Retrying search...")
         try:
             if api_key or os.getenv("SERPAPI_API_KEY"):
-                print("🛰️  Retrying SerpAPI without trusted sources filter...")
+                print("🛰️  Retrying SerpAPI...")
                 effective_key = api_key or os.getenv("SERPAPI_API_KEY") or os.getenv("SERPAPI_KEY")
                 
-                # Search without site filter
                 params = {
                     "engine": "google",
-                    "q": search_query,  # Original query without site filter
+                    "q": search_query,
                     "api_key": effective_key,
-                    "num": 10,
+                    "num": 20,
                     "gl": "us",
                     "hl": "en",
                 }
@@ -263,24 +239,24 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                 results = search_instance.get_dict()
                 
                 if 'organic_results' in results:
-                    organic = results.get('organic_results', [])[:5]
+                    organic = results.get('organic_results', [])[:20]
                     links_with_meta = []
                     for res in organic:
                         link = res.get('link') or res.get('url')
                         title = res.get('title')
                         if link:
                             links_with_meta.append({"title": title, "url": link})
-                    print(f"✅ Fallback search returned {len(links_with_meta)} results from all sources")
+                    print(f"✅ Retry search returned {len(links_with_meta)} results")
             else:
-                print("🧭 Retrying Google search without trusted sources filter...")
+                print("🧭 Retrying Google search...")
                 try:
-                    urls = list(search(search_query, tld="com", lang="en", num=10, stop=5, pause=3.0))
+                    urls = list(search(search_query, tld="com", lang="en", num=20, stop=20, pause=3.0))
                     links_with_meta = [{"title": None, "url": url} for url in urls]
-                    print(f"✅ Fallback Google search returned {len(urls)} URLs from all sources")
+                    print(f"✅ Retry Google search returned {len(urls)} URLs")
                 except Exception as e:
-                    print(f"❌ Fallback Google search failed: {e}")
+                    print(f"❌ Retry Google search failed: {e}")
         except Exception as e:
-            print(f"❌ Fallback search failed: {e}")
+            print(f"❌ Retry search failed: {e}")
 
     print(f"🔗 Found {len(links_with_meta)} links")
     if len(links_with_meta) == 0:
@@ -288,13 +264,108 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         print(f"🔧 Debug - API key available: {bool(api_key or os.getenv('SERPAPI_API_KEY'))}")
         print(f"🔧 Debug - Using SerpAPI: {bool(api_key or os.getenv('SERPAPI_API_KEY'))}")
 
-    results = []
-    for idx, item in enumerate(links_with_meta[:5], start=1):
-        url = item.get("url")
-        title = item.get("title")
+    # Filter out Wikipedia and ensure unique domains (one result per site)
+    def extract_domain(url):
+        """Extract the main domain from a URL"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url.lower())
+            domain = parsed.netloc.replace("www.", "").split(":")[0]
+            # Remove subdomains that aren't www (e.g., news.rappler.com -> rappler.com)
+            parts = domain.split(".")
+            if len(parts) > 2:
+                # Check if it's a known subdomain pattern or keep the main domain
+                # For now, keep the last two parts (e.g., rappler.com)
+                domain = ".".join(parts[-2:])
+            return domain
+        except Exception:
+            return None
+    
+    filtered_links = []
+    seen_domains = set()
+    trusted_links = []
+    other_links = []
+    
+    # First pass: separate trusted and other sources
+    for item in links_with_meta:
+        url = item.get("url", "")
         if not url:
             continue
-        print(f"\n[{idx}/5] ▶️  Fetching article")
+            
+        url_lower = url.lower()
+        # Exclude Wikipedia
+        if "wikipedia.org" in url_lower or "wikipedia.com" in url_lower:
+            print(f"🚫 Excluding Wikipedia: {url}")
+            continue
+        
+        # Extract domain
+        domain = extract_domain(url)
+        if not domain:
+            continue
+        
+        # Check if it's a trusted source
+        is_trusted = False
+        for trusted_domain in FILTERED_DOMAINS:
+            trusted_domain_clean = trusted_domain.replace("https://", "").replace("http://", "").replace("www.", "").rstrip("/")
+            if trusted_domain_clean in url_lower:
+                is_trusted = True
+                break
+        
+        # Add domain info to item for later use
+        item_with_domain = item.copy()
+        item_with_domain['_domain'] = domain
+        item_with_domain['_is_trusted'] = is_trusted
+        
+        if is_trusted:
+            trusted_links.append(item_with_domain)
+        else:
+            other_links.append(item_with_domain)
+    
+    print(f"📊 Found {len(trusted_links)} trusted links and {len(other_links)} unverified links")
+    
+    # Second pass: select unique domains, prioritizing trusted sources but including unverified
+    # First, add trusted sources (one per domain) - get up to 5 verified
+    for item in trusted_links:
+        domain = item.get('_domain')
+        if domain and domain not in seen_domains:
+            seen_domains.add(domain)
+            # Keep verification status, remove internal tracking field
+            is_trusted = item.get('_is_trusted', False)
+            item.pop('_domain', None)
+            item.pop('_is_trusted', None)
+            item['verified'] = True  # Mark as verified
+            item['is_trusted'] = is_trusted  # Keep for backward compatibility
+            filtered_links.append(item)
+            if len([x for x in filtered_links if x.get('verified')]) >= 5:
+                break  # Stop when we have 5 verified sources
+    
+    # Then, add unverified sources (one per domain) - get up to 5 more (10 total)
+    for item in other_links:
+        domain = item.get('_domain')
+        if domain and domain not in seen_domains:
+            seen_domains.add(domain)
+            # Mark as unverified
+            item.pop('_domain', None)
+            item.pop('_is_trusted', None)
+            item['verified'] = False  # Mark as unverified
+            item['is_trusted'] = False
+            filtered_links.append(item)
+            if len(filtered_links) >= 10:  # Get up to 10 total (5 verified + 5 unverified)
+                break
+    
+    verified_count = len([x for x in filtered_links if x.get('verified')])
+    unverified_count = len([x for x in filtered_links if not x.get('verified')])
+    print(f"✅ Filtered to {len(filtered_links)} unique domain links ({verified_count} verified, {unverified_count} unverified)")
+
+    results = []
+    for idx, item in enumerate(filtered_links, start=1):
+        url = item.get("url")
+        title = item.get("title")
+        verified = item.get("verified", False)
+        if not url:
+            continue
+        status = "✅ Verified" if verified else "⚠️  Unverified"
+        print(f"\n[{idx}/{len(filtered_links)}] ▶️  Fetching article {status}: {url}")
         content = extract_article_text(url)
         if content and len(content.strip()) > 50:
             print("  🧠 Running NER…")
@@ -304,14 +375,18 @@ def main_system(query, api_key=None, use_trusted_sources=True):
                 "title": title,
                 "url": url,
                 "content": content,
-                "entities": analysis
+                "entities": analysis,
+                "verified": verified,  # Add verification status
+                "is_trusted": item.get("is_trusted", verified)  # Backward compatibility
             })
         else:
             print("  ⏭️  Skipped: insufficient content")
 
-    print(f"✅ Completed. Articles kept: {len(results)}")
-    # Ensure max 5
-    return results[:5]
+    verified_results = len([r for r in results if r.get('verified')])
+    unverified_results = len([r for r in results if not r.get('verified')])
+    print(f"✅ Completed. Articles kept: {len(results)} ({verified_results} verified, {unverified_results} unverified)")
+    # Return all results (both verified and unverified)
+    return results
 
 # --- User Input and Output ---
 if __name__ == "__main__":

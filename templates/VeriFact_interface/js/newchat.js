@@ -11,6 +11,7 @@ class ChatManager {
     this.conversations = {}; // Store by search_id
     this.currentConversationId = null;
     this.selectedConversations = new Set();
+    this.pendingMessage = null;
   }
 
   // Load conversations from server
@@ -46,6 +47,7 @@ class ChatManager {
     }
   }
 
+ 
   // Start a new chat
   async newChat() {
     // Save current conversation if it exists and has messages
@@ -71,8 +73,11 @@ class ChatManager {
       sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
     }
 
-    // Reset to null (will be set when first message is sent)
+    // **CRITICAL: Reset to null so a NEW search is created on first message**
     this.currentConversationId = null;
+    
+    // Clear pending message
+    this.pendingMessage = null;
 
     // Reset chat input to centered
     const chatInput = document.getElementById('chatInput');
@@ -84,12 +89,15 @@ class ChatManager {
       const textarea = chatInput.querySelector('textarea');
       if (textarea) {
         textarea.value = '';
+        textarea.style.height = 'auto';
         textarea.focus();
       }
     }
 
-    // Update active state in sidebar
+    // Update active state in sidebar (deselect all)
     this.updateActiveConversation();
+    
+    console.log('✅ New chat started - currentConversationId reset to:', this.currentConversationId);
   }
 
   // Save current conversation (called before switching or creating new)
@@ -177,6 +185,39 @@ class ChatManager {
 
     // Update active state
     this.updateActiveConversation();
+
+    if (this.pendingMessage) {
+      const { text, inputRef } = this.pendingMessage;
+      requestAnimationFrame(() => {
+    if (inputRef) {
+      inputRef.value = text;
+      inputRef.dispatchEvent(new Event('input'));
+    }
+    if (typeof sendMessage === 'function') {
+      sendMessage(true);
+    }
+        this.pendingMessage = null;
+      });
+    }
+  }
+
+  hydrateFromServerHistory(conversationsList = []) {
+    this.conversations = {};
+    conversationsList.forEach(conv => {
+      if (!conv.messages) return;
+      conv.messages = conv.messages.map(msg => {
+        if (msg.role === 'bot' && !msg.sources && msg.summary && (!msg.accuracy || msg.accuracy.total_count === 0)) {
+          return {
+            role: 'bot',
+            content: msg.summary,
+            followup: true
+          };
+        }
+        return msg;
+      });
+      this.conversations[conv.search_id] = conv;
+    });
+    this.renderChatHistory();
   }
 
   // Build bot message with full UI (summary, sources, accuracy)
@@ -230,17 +271,14 @@ class ChatManager {
               </div>
 
               <hr>
-              <strong>Key Findings:</strong>
-              <ul class="resp-keyfindings">
-                <li>${messageData.accuracy.trusted_count} out of ${messageData.accuracy.total_count} sources are from verified outlets</li>
-                <li>${messageData.accuracy.total_count - messageData.accuracy.trusted_count} unverified source${messageData.accuracy.total_count - messageData.accuracy.trusted_count !== 1 ? 's' : ''}</li>
-                ${messageData.accuracy.true_percent >= 80 ? '<li style="color:#4caf50;">High confidence in information accuracy</li>' : ''}
-                ${messageData.accuracy.true_percent < 50 ? '<li style="color:#e53935;">⚠️ Exercise caution - limited verified sources</li>' : ''}
-              </ul>
+             
             </div>
           </div>
         </div>
       `;
+
+      const sourcesForArchive = Array.isArray(messageData.sources) ? messageData.sources : [];
+      botMsg._sourcesForArchive = sourcesForArchive;
 
       // Wire up accordion toggle
       const toggleBtn = botMsg.querySelector('.accordion-toggle');
@@ -263,7 +301,7 @@ class ChatManager {
         saveBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (typeof saveResponseToArchive === 'function') {
-            saveResponseToArchive(botMsg);
+            saveResponseToArchive(botMsg, sourcesForArchive);
           }
           saveBtn.classList.add('saved');
           saveBtn.title = 'Saved';
@@ -346,6 +384,17 @@ class ChatManager {
     this.attachCheckboxListeners();
   }
 
+  updateActiveConversation() {
+  document.querySelectorAll('.chat-history-item').forEach(item => {
+    const itemId = parseInt(item.getAttribute('data-conversation-id'));
+    if (itemId === this.currentConversationId) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
   // Attach click handlers to history items
   attachHistoryItemListeners() {
     document.querySelectorAll('.chat-history-item').forEach(item => {
@@ -363,63 +412,166 @@ class ChatManager {
     });
   }
 
-  // Attach checkbox event listeners
+    // Attach checkbox event listeners
   attachCheckboxListeners() {
     const selectAllCheckbox = document.getElementById('select-all-chats');
     const chatCheckboxes = document.querySelectorAll('.chat-checkbox-input');
+    
+    // Get delete button and replace it to prevent duplicate event listeners
     const deleteSelectedBtn = document.getElementById('deleteSelectedChats');
-
-    // Select All functionality
-    if (selectAllCheckbox) {
-      selectAllCheckbox.addEventListener('change', (e) => {
-        const isChecked = e.target.checked;
-        chatCheckboxes.forEach(checkbox => {
-          checkbox.checked = isChecked;
-          const convId = parseInt(checkbox.value);
-          if (isChecked) {
-            this.selectedConversations.add(convId);
-          } else {
-            this.selectedConversations.delete(convId);
-          }
-        });
-        if (deleteSelectedBtn) {
-          deleteSelectedBtn.disabled = !isChecked;
-        }
-      });
+    let newDeleteBtn = deleteSelectedBtn;
+    
+    // If delete button exists, clone it to remove any existing event listeners
+    if (deleteSelectedBtn) {
+      newDeleteBtn = deleteSelectedBtn.cloneNode(true);
+      deleteSelectedBtn.parentNode.replaceChild(newDeleteBtn, deleteSelectedBtn);
+      
+      // Update the reference to the new button
+      this.deleteSelectedBtn = newDeleteBtn;
     }
 
-    // Individual checkbox functionality
-    chatCheckboxes.forEach(checkbox => {
-      checkbox.addEventListener('change', (e) => {
-        const convId = parseInt(e.target.value);
-        if (e.target.checked) {
+    // Function to get current checkboxes
+    const getCurrentCheckboxes = () => {
+      return document.querySelectorAll('.chat-checkbox-input');
+    };
+
+    // Function to update delete button state
+    const updateDeleteButtonState = () => {
+      if (newDeleteBtn) {
+        const anyChecked = Array.from(getCurrentCheckboxes()).some(cb => cb.checked);
+        newDeleteBtn.disabled = !anyChecked;
+      }
+    };
+
+    // Function to update select all checkbox state
+  const updateSelectAllState = () => {
+    if (selectAllCheckbox) {
+      const currentCheckboxes = getCurrentCheckboxes();
+      const allChecked = currentCheckboxes.length > 0 && 
+                        Array.from(currentCheckboxes).every(cb => cb.checked);
+      selectAllCheckbox.checked = allChecked;
+      selectAllCheckbox.indeterminate = !allChecked && 
+                                       Array.from(currentCheckboxes).some(cb => cb.checked);
+    }
+  };
+
+    // Select All functionality
+  if (selectAllCheckbox) {
+    // Clone to remove existing event listeners
+    const newSelectAll = selectAllCheckbox.cloneNode(true);
+    selectAllCheckbox.parentNode.replaceChild(newSelectAll, selectAllCheckbox);
+    
+    newSelectAll.addEventListener('change', (e) => {
+      const isChecked = e.target.checked;
+      const currentCheckboxes = getCurrentCheckboxes();
+      
+      currentCheckboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+        const convId = parseInt(checkbox.value);
+        if (isChecked) {
           this.selectedConversations.add(convId);
         } else {
           this.selectedConversations.delete(convId);
         }
-        
-        // Update delete button state
-        if (deleteSelectedBtn) {
-          deleteSelectedBtn.disabled = this.selectedConversations.size === 0;
-        }
-        
-        // Update select all checkbox
-        if (selectAllCheckbox) {
-          const allChecked = chatCheckboxes.length > 0 && 
-                           Array.from(chatCheckboxes).every(cb => cb.checked);
-          selectAllCheckbox.checked = allChecked;
-        }
       });
+      
+      updateDeleteButtonState();
     });
+  }
 
-    // Delete selected functionality
-    if (deleteSelectedBtn) {
-      deleteSelectedBtn.addEventListener('click', async () => {
+     // Individual checkbox functionality
+  chatCheckboxes.forEach(checkbox => {
+    // Clone to remove any existing event listeners
+    const newCheckbox = checkbox.cloneNode(true);
+    checkbox.parentNode.replaceChild(newCheckbox, checkbox);
+    
+    newCheckbox.addEventListener('change', (e) => {
+      const convId = parseInt(e.target.value);
+      if (e.target.checked) {
+        this.selectedConversations.add(convId);
+      } else {
+        this.selectedConversations.delete(convId);
+      }
+      
+      updateDeleteButtonState();
+      updateSelectAllState();
+    });
+  });
+    
+    // Set initial state of delete button
+    updateDeleteButtonState();
+    updateSelectAllState();
+
+   // Delete selected conversations with custom confirmation
+    if (this.deleteSelectedBtn) {
+      this.deleteSelectedBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
         if (this.selectedConversations.size === 0) return;
 
-        if (confirm(`Delete ${this.selectedConversations.size} selected conversation(s)?`)) {
-          // Delete from server
+        // Create a single confirmation promise
+        const confirmed = await new Promise((resolve) => {
+          // Create custom confirmation dialog
+          const confirmationBox = document.createElement('div');
+          confirmationBox.className = 'custom-confirmation';
+          confirmationBox.setAttribute('role', 'dialog');
+          confirmationBox.setAttribute('aria-modal', 'true');
+          confirmationBox.innerHTML = `
+            <div class="confirmation-content">
+              <p>Are you sure you want to delete <strong>${this.selectedConversations.size}</strong> selected item(s)?</p>
+              <div class="confirmation-buttons">
+                <button class="confirm-yes">Yes</button>
+                <button class="confirm-no">No</button>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(confirmationBox);
+
+          const yesBtn = confirmationBox.querySelector('.confirm-yes');
+          const noBtn = confirmationBox.querySelector('.confirm-no');
+          if (yesBtn) yesBtn.focus();
+
+          // Handle Yes button click
+          const handleYesClick = () => {
+            cleanup();
+            resolve(true);
+          };
+
+          // Handle No button click
+          const handleNoClick = () => {
+            cleanup();
+            resolve(false);
+          };
+
+          // Close on Escape key
+          const escHandler = (e) => {
+            if (e.key === 'Escape') {
+              cleanup();
+              resolve(false);
+            }
+          };
+
+          // Cleanup function
+          const cleanup = () => {
+            if (yesBtn) yesBtn.removeEventListener('click', handleYesClick);
+            if (noBtn) noBtn.removeEventListener('click', handleNoClick);
+            document.removeEventListener('keydown', escHandler);
+            if (document.body.contains(confirmationBox)) {
+              document.body.removeChild(confirmationBox);
+            }
+          };
+
+          // Add event listeners
+          yesBtn.addEventListener('click', handleYesClick);
+          if (noBtn) noBtn.addEventListener('click', handleNoClick);
+          document.addEventListener('keydown', escHandler);
+        });
+
+        // If user confirmed deletion
+        if (confirmed) {
           try {
+            // Delete from server
             for (const convId of this.selectedConversations) {
               await fetch(`/api/chat/delete/${convId}`, {
                 method: 'DELETE',
@@ -435,11 +587,13 @@ class ChatManager {
               this.newChat();
             }
 
+            // Update UI
+            const deletedCount = this.selectedConversations.size;
             this.selectedConversations.clear();
             this.renderChatHistory();
             
             if (typeof showNotification === 'function') {
-              showNotification('Conversations deleted successfully', 'success');
+              showNotification(`${deletedCount} conversation(s) deleted successfully`, 'success');
             }
           } catch (error) {
             console.error('Error deleting conversations:', error);
@@ -450,14 +604,6 @@ class ChatManager {
         }
       });
     }
-  }
-
-  // Update active conversation styling
-  updateActiveConversation() {
-    document.querySelectorAll('.chat-history-item').forEach(item => {
-      const convId = parseInt(item.getAttribute('data-conversation-id'));
-      item.classList.toggle('active', convId === this.currentConversationId);
-    });
   }
 }
 
@@ -494,4 +640,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     sidebarNewChatBtn.addEventListener('click', () => chatManager.newChat());
   }
 });
+
+window.chatManagerSendMessage = function(forceSend = false) {
+  const input = document.getElementById('userInput');
+  const value = input ? input.value.trim() : '';
+
+  if (!value) return;
+
+  if (chatManager && (forceSend || chatManager.currentConversationId)) {
+    if (typeof sendMessage === 'function') {
+      sendMessage(forceSend);
+    }
+  } else {
+    chatManager.pendingMessage = { text: value, inputRef: input };
+    chatManager.newChat();
+  }
+};
 

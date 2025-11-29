@@ -54,33 +54,55 @@
             return obj;
         }
 
-        function handleSubmit(form, url, isSignup = false) {
-            form.addEventListener('submit', function(e){
-                e.preventDefault();
-                var body = toJSON(form);
-                fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body),
-                    credentials: 'same-origin'
-                }).then(function(res){
-                    return res.json().then(function(json){ return { ok: res.ok, json: json }; });
-                }).then(function(result){
-                    if (!result.ok) { throw new Error(result.json && result.json.message || 'Request failed'); }
-                    // Close modal
-                    close(form.closest('.modal'));
-                    
-                    if (isSignup) {
-                        // For signup, show success message and don't redirect
-                        alert('Account created successfully! Please sign in with your credentials.');
-                        // Optionally open login modal
+        function showCustomNotification(message, type = 'success') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `custom-notification ${type}`;
+        notification.setAttribute('role', 'alert');
+        notification.textContent = message;
+        
+        // Add to body
+        document.body.appendChild(notification);
+        
+        // Show notification
+        setTimeout(() => notification.classList.add('show'), 10);
+        
+        // Remove after delay
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 2000);
+    }
+
+    function handleSubmit(form, url, isSignup = false) {
+        form.addEventListener('submit', function(e){
+            e.preventDefault();
+            var body = toJSON(form);
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                credentials: 'same-origin'
+            }).then(function(res){
+                return res.json().then(function(json){ return { ok: res.ok, json: json }; });
+            }).then(function(result){
+                if (!result.ok) { throw new Error(result.json && result.json.message || 'Request failed'); }
+                // Close modal
+                close(form.closest('.modal'));
+                
+                if (isSignup) {
+                    // For signup, show custom success message and open login modal
+                    showCustomNotification('Account created successfully! Please sign in with your credentials.');
+                    // Open login modal after a short delay
+                    setTimeout(() => {
                         if (loginModal) open(loginModal);
-                    } else {
-                        // For login, redirect to home interface
-                        window.location.href = '/home';
-                    }
+                    }, 300);
+                } else {
+                    // For login, redirect to home interface
+                    window.location.href = '/home';
+                }
                 }).catch(function(err){
-                    alert(err.message || 'Something went wrong');
+                    showCustomNotification(err.message || 'Invalid username or password', 'error');
                 });
             });
         }

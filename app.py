@@ -1,4 +1,7 @@
 from flask import Flask, render_template, request, redirect, session, jsonify, send_from_directory, Response, flash
+import json
+import os
+from urllib.parse import urlparse
 import psycopg2
 import psycopg2.extras
 from scraper import main_system, search_serpapi
@@ -9,7 +12,6 @@ try:
     load_dotenv()
 except Exception:
     pass
-import os
 # Normalize SERPAPI env var names so either works
 if os.getenv("SERPAPI_KEY") and not os.getenv("SERPAPI_API_KEY"):
     os.environ["SERPAPI_API_KEY"] = os.getenv("SERPAPI_KEY")
@@ -17,7 +19,7 @@ import uuid
 
 from datetime import datetime
 from werkzeug.utils import secure_filename
-from ai_summary import generate_summary_from_text
+from ai_summary import generate_summary_from_text, generate_followup_reply
 from werkzeug.security import generate_password_hash, check_password_hash
 import spacy
 import re
@@ -53,6 +55,17 @@ except OSError:
 # Config for image uploads
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'img')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+TRUSTED_DOMAINS = [
+    'rappler.com',
+    'inquirer.net',
+    'verafiles.org',
+    'philstar.com',
+    'abs-cbn.com',
+    'tsek.ph',
+    'wikipedia.org'
+]
+MAX_RELEVANT_SOURCES = int(os.getenv("VERIFACT_MAX_RELEVANT_SOURCES", "12"))
+TRUSTED_SOURCE_WEIGHT = float(os.getenv("VERIFACT_TRUSTED_SOURCE_WEIGHT", "0.25"))
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 if not os.path.exists(UPLOAD_FOLDER):
@@ -96,6 +109,249 @@ def extract_categories_from_search(search_text):
     
     # Convert set to list and return
     return list(categories)
+
+def parse_results_payload(results_payload):
+    """Ensure we always work with a list of result dicts."""
+    if not results_payload:
+        return []
+    if isinstance(results_payload, str):
+        try:
+            return json.loads(results_payload)
+        except json.JSONDecodeError:
+            return []
+    return results_payload
+
+def calculate_source_metrics(results_payload, summary_text=None):
+    """Calculate credibility metrics combining coverage and trusted domains."""
+    results_list = parse_results_payload(results_payload)
+    total_count = len(results_list)
+    trusted_count = 0
+
+    for item in results_list:
+        url = (item.get('url') or '').lower()
+        if any(domain in url for domain in TRUSTED_DOMAINS):
+            trusted_count += 1
+
+    coverage_cap = MAX_RELEVANT_SOURCES if MAX_RELEVANT_SOURCES > 0 else total_count
+    coverage_raw = min(total_count, coverage_cap)
+    coverage_ratio = (coverage_raw / coverage_cap) if coverage_cap else 0
+    trust_ratio = (trusted_count / total_count) if total_count else 0
+
+    credibility_score = coverage_ratio * (1 + TRUSTED_SOURCE_WEIGHT * trust_ratio)
+    credibility_score = min(credibility_score, 1.0)
+    true_percent = int(round(credibility_score * 100))
+    false_percent = max(0, 100 - true_percent)
+
+    if summary_text:
+        summary_lower = summary_text.lower()
+        if '⚠️' in summary_text or 'unverified' in summary_lower:
+            true_percent = max(30, true_percent - 20)
+        elif '❌' in summary_text or 'no results' in summary_lower:
+            true_percent = 0
+        elif 'could not extract' in summary_lower:
+            true_percent = max(20, true_percent - 30)
+        false_percent = max(0, 100 - true_percent)
+
+    return {
+        'true_percent': true_percent,
+        'false_percent': false_percent,
+        'trusted_count': trusted_count,
+        'total_count': total_count,
+        'coverage_count': coverage_raw,
+        'coverage_ratio': coverage_ratio
+    }
+
+def persist_credibility_score(cursor, user_id, result_id, metrics):
+    """Save or update aggregated credibility score per result."""
+    if not user_id or not result_id or not metrics:
+        return
+
+    cursor.execute(
+        "SELECT article_id FROM articles WHERE result_id = %s ORDER BY article_id ASC LIMIT 1",
+        (result_id,)
+    )
+    article = cursor.fetchone()
+    if not article:
+        return
+
+    true_score = float(metrics.get('true_percent', 0))
+    false_score = float(metrics.get('false_percent', 0))
+    inconclusive_score = max(0.0, 100.0 - true_score - false_score)
+
+    cursor.execute(
+        """
+        SELECT credible_id FROM credibilityscore
+        WHERE user_id = %s AND result_id = %s
+        LIMIT 1
+        """,
+        (user_id, result_id)
+    )
+    existing = cursor.fetchone()
+
+    if existing:
+        cursor.execute(
+            """
+            UPDATE credibilityscore
+            SET article_id = %s,
+                credibilityscorefull = %s,
+                true_score = %s,
+                false_score = %s,
+                inconclusive_score = %s,
+                created_at = CURRENT_TIMESTAMP
+            WHERE credible_id = %s
+            """,
+            (
+                article['article_id'],
+                true_score,
+                true_score,
+                false_score,
+                inconclusive_score,
+                existing['credible_id']
+            )
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO credibilityscore (
+                user_id,
+                article_id,
+                result_id,
+                credibilityscorefull,
+                true_score,
+                false_score,
+                inconclusive_score
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                user_id,
+                article['article_id'],
+                result_id,
+                true_score,
+                true_score,
+                false_score,
+                inconclusive_score
+            )
+        )
+
+
+def get_search_context(cursor, user_id, search_id=None):
+    """Retrieve latest search/query/result context for follow-up chats."""
+    search_row = None
+    if search_id:
+        cursor.execute(
+            """
+            SELECT search_id, query_text
+            FROM searches
+            WHERE search_id = %s AND account_id = %s
+            """,
+            (search_id, user_id)
+        )
+        search_row = cursor.fetchone()
+
+    if not search_row:
+        cursor.execute(
+            """
+            SELECT search_id, query_text
+            FROM searches
+            WHERE account_id = %s
+            ORDER BY timestamp DESC
+            LIMIT 1
+            """,
+            (user_id,)
+        )
+        search_row = cursor.fetchone()
+
+    if not search_row:
+        return None
+
+    query_text = search_row['query_text']
+    cursor.execute(
+        """
+        SELECT result_id, results
+        FROM search_results
+        WHERE query = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (query_text,)
+    )
+    result_row = cursor.fetchone()
+
+    if not result_row:
+        return {
+            'search_id': search_row['search_id'],
+            'query': query_text,
+            'result_id': None,
+            'results_raw': [],
+            'sources': [],
+            'summary': None
+        }
+
+    cursor.execute(
+        """
+        SELECT summary_text
+        FROM usersummaries
+        WHERE user_id = %s AND result_id = %s
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (user_id, result_row['result_id'])
+    )
+    summary_row = cursor.fetchone()
+
+    results_list = parse_results_payload(result_row['results'])
+    sources = []
+    for item in results_list[:5]:
+        url = item.get('url', '')
+        # Use verified field from scraper if available, otherwise check URL
+        is_trusted = item.get('verified', item.get('is_trusted', False))
+        if not is_trusted:
+            # Fallback to URL check if verified field not present
+            is_trusted = any(domain in (url or '') for domain in TRUSTED_DOMAINS)
+        sources.append({
+            'title': item.get('title', 'Untitled'),
+            'url': url,
+            'is_trusted': is_trusted,
+            'verified': item.get('verified', is_trusted)  # Add verified field
+        })
+
+    return {
+        'search_id': search_row['search_id'],
+        'query': query_text,
+        'result_id': result_row['result_id'],
+        'results_raw': results_list,
+        'sources': sources,
+        'summary': summary_row['summary_text'] if summary_row else None
+    }
+
+
+def build_followup_response(message, context, metrics):
+    """Construct a follow-up response using Gemini with stored context."""
+    try:
+        response = generate_followup_reply(
+            message,
+            context.get('summary'),
+            context.get('sources'),
+            metrics
+        )
+        if response and response.strip():
+            return response.strip()
+    except Exception as e:
+        print("⚠️ Gemini follow-up error:", e)
+
+    summary_text = context.get('summary') or "No detailed summary is available yet."
+    query = context.get('query') or 'this topic'
+    trusted = metrics.get('trusted_count', 0)
+    total = metrics.get('total_count', 0)
+    fallback = (
+        f'You asked: "{message}". '
+        f'Existing information on "{query}" says: {summary_text} '
+        f'(Credibility {metrics.get("true_percent", 0)}% with {trusted} trusted source{"s" if trusted != 1 else ""} '
+        f'out of {total}).'
+    )
+    return fallback
+
 
 def get_db_connection():
     return psycopg2.connect(
@@ -277,6 +533,8 @@ def search():
                                     VALUES (%s, %s, %s)
                                 """
                                 cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, summary_text))
+                                metrics = calculate_source_metrics(results, summary_text)
+                                persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                                 print("✅ AI summary stored successfully")
                                 
                             except Exception as summary_error:
@@ -288,6 +546,8 @@ def search():
                                     VALUES (%s, %s, %s)
                                 """
                                 cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, fallback_summary))
+                                metrics = calculate_source_metrics(results, fallback_summary)
+                                persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                     db.commit()
             except Exception as e:
                 print("❌ DB Insert Error:", e)
@@ -300,29 +560,49 @@ def api_scrape():
     try:
         data = request.get_json(silent=True) or request.form
         query = (data.get('query') or '').strip()
+        search_id = data.get('search_id')
+        
         if not query:
-            # If no query provided, try to load the most recent one for this user
+            # If no query provided, try to get it from search_id or most recent search
             if 'user_db_id' not in session:
                 return jsonify({'status': 'error', 'message': 'query is required'}), 400
             try:
                 with get_db_connection() as db:
                     with db.cursor() as cursor:
-                        cursor.execute(
-                            """
-                            SELECT query_text
-                            FROM searches
-                            WHERE account_id = %s
-                            ORDER BY timestamp DESC
-                            LIMIT 1
-                            """,
-                            (session['user_db_id'],)
-                        )
-                        row = cursor.fetchone()
-                        if row and row.get('query_text'):
-                            query = (row['query_text'] or '').strip()
+                        if search_id:
+                            # Get query from specific search_id
+                            cursor.execute(
+                                """
+                                SELECT query_text
+                                FROM searches
+                                WHERE search_id = %s AND account_id = %s
+                                """,
+                                (search_id, session['user_db_id'])
+                            )
+                            row = cursor.fetchone()
+                            if row and row.get('query_text'):
+                                query = (row['query_text'] or '').strip()
+                            else:
+                                return jsonify({'status': 'error', 'message': 'Search not found'}), 404
                         else:
-                            return jsonify({'status': 'error', 'message': 'query is required'}), 400
-            except Exception:
+                            # Get query from most recent search
+                            cursor.execute(
+                                """
+                                SELECT query_text
+                                FROM searches
+                                WHERE account_id = %s
+                                ORDER BY timestamp DESC
+                                LIMIT 1
+                                """,
+                                (session['user_db_id'],)
+                            )
+                            row = cursor.fetchone()
+                            if row and row.get('query_text'):
+                                query = (row['query_text'] or '').strip()
+                            else:
+                                return jsonify({'status': 'error', 'message': 'query is required'}), 400
+            except Exception as e:
+                print(f"❌ Error getting query: {e}")
                 return jsonify({'status': 'error', 'message': 'query is required'}), 400
 
         serpapi_key = data.get('serpapi_key') or os.getenv("SERPAPI_API_KEY") or "b78924b4496d3e2abba8b33f9e89fa5eb443f8e5ba0db605c98b5b6bae37e50c"
@@ -432,6 +712,8 @@ def api_scrape():
                             """
                         )
                         cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, summary_text))
+                        metrics = calculate_source_metrics(results, summary_text)
+                        persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                         print("✅ AI summary stored successfully (API scrape)")
                     except Exception as summary_error:
                         print(f"❌ AI Summary Error (API scrape): {summary_error}")
@@ -443,6 +725,8 @@ def api_scrape():
                             """
                         )
                         cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, fallback_summary))
+                        metrics = calculate_source_metrics(results, fallback_summary)
+                        persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
 
                 db.commit()
 
@@ -668,7 +952,7 @@ def get_specific_summary(summary_id):
 # -------- Chat Endpoints --------
 @app.route('/api/chat/send', methods=['POST'])
 def send_chat_message():
-    """Save a chat message to the database"""
+    """Save a chat message to the database, ensuring search_id is linked to conversationHistory."""
     try:
         if 'user_db_id' not in session:
             return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
@@ -681,117 +965,138 @@ def send_chat_message():
         if not message:
             return jsonify({'status': 'error', 'message': 'Message cannot be empty'}), 400
         
+        provided_search_id = data.get('search_id')
+        
         with get_db_connection() as db:
             with db.cursor() as cursor:
-                # Check if there's a recent search for this user
-                check_sql = """
-                    SELECT search_id 
-                    FROM searches 
-                    WHERE account_id = %s 
-                    AND timestamp > NOW() - INTERVAL '1 hour'
-                    ORDER BY timestamp DESC 
-                    LIMIT 1
-                """
-                cursor.execute(check_sql, (session['user_db_id'],))
-                recent_search = cursor.fetchone()
+                search_id_to_use = None
+                is_first_message = False
                 
-                if recent_search:
-                    # Follow-up message - save to conversationHistory (no search_id column in table)
-                    insert_sql = """
-                        INSERT INTO "conversationHistory" (user_id, query_text, response_text) 
-                        VALUES (%s, %s, %s) 
-                        RETURNING chat_id, timestamp
-                    """
-                    cursor.execute(insert_sql, (session['user_db_id'], message, ''))
+                # Try to find existing search
+                if provided_search_id:
+                    cursor.execute(
+                        "SELECT search_id FROM searches WHERE search_id = %s AND account_id = %s",
+                        (provided_search_id, session['user_db_id'])
+                    )
                     result = cursor.fetchone()
-                    # Extract categories from the user message and store in categories table
-                    try:
-                        chat_categories = extract_categories_from_search(message)
-                        normalized_seen = set()
-                        for category in chat_categories:
-                            normalized = re.sub(r"\s+", " ", (category or "").strip().lower())
-                            if not normalized or normalized in normalized_seen:
-                                continue
-                            normalized_seen.add(normalized)
-                            # Check if category already exists for THIS search_id to prevent duplicates within same search
-                            check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
-                            cursor.execute(check_sql, (recent_search['search_id'], normalized))
-                            existing = cursor.fetchone()
-                            if not existing:
-                                insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
-                                cursor.execute(insert_category_sql, (recent_search['search_id'], normalized, 'SEARCH_KEYWORD'))
-                    except Exception as cat_err:
-                        print("⚠️ Chat category extract/insert error:", cat_err)
-                    db.commit()
-                    
-                    return jsonify({
-                        'status': 'success',
-                        'chat_id': result['chat_id'],
-                        'search_id': recent_search['search_id'],
-                        'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
-                        'is_first_message': False
-                    })
-                else:
-                    # First message - check if search already exists for this query (within last 5 minutes)
-                    check_first_search_sql = """
-                        SELECT search_id, timestamp FROM searches 
+                    if result:
+                        search_id_to_use = result['search_id']
+                
+                # If no valid search_id, look for recent search
+                if not search_id_to_use:
+                    cursor.execute(
+                        """
+                        SELECT search_id FROM searches 
                         WHERE account_id = %s 
-                        AND query_text = %s 
-                        AND timestamp > NOW() - INTERVAL '5 minutes'
+                        AND timestamp > NOW() - INTERVAL '1 hour'
                         ORDER BY timestamp DESC 
                         LIMIT 1
+                        """,
+                        (session['user_db_id'],)
+                    )
+                    result = cursor.fetchone()
+                    if result:
+                        search_id_to_use = result['search_id']
+                
+                # Create new search if needed
+                if not search_id_to_use:
+                    is_first_message = True
+                    cursor.execute(
+                        "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id",
+                        (session['user_db_id'], message)
+                    )
+                    result = cursor.fetchone()
+                    search_id_to_use = result['search_id']
+                
+                # Insert chat message
+                cursor.execute(
                     """
-                    cursor.execute(check_first_search_sql, (session['user_db_id'], message))
-                    existing_first_search = cursor.fetchone()
-                    
-                    if existing_first_search:
-                        result = existing_first_search
-                    else:
-                        # Insert into searches table only if it doesn't exist
-                        insert_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id, timestamp"
-                        cursor.execute(insert_sql, (session['user_db_id'], message))
-                        result = cursor.fetchone()
-                    
-                    # Save the first user message to conversationHistory as well
-                    insert_chat_sql = """
-                        INSERT INTO "conversationHistory" (user_id, query_text, response_text)
-                        VALUES (%s, %s, %s)
-                        RETURNING chat_id, timestamp
-                    """
-                    cursor.execute(insert_chat_sql, (session['user_db_id'], message, ''))
-                    chat_entry = cursor.fetchone()
-                    # Extract categories from the user message and store in categories table
-                    try:
-                        chat_categories = extract_categories_from_search(message)
-                        normalized_seen = set()
-                        for category in chat_categories:
-                            normalized = re.sub(r"\s+", " ", (category or "").strip().lower())
-                            if not normalized or normalized in normalized_seen:
-                                continue
-                            normalized_seen.add(normalized)
-                            # Check if category already exists for THIS search_id to prevent duplicates within same search
-                            check_sql = "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s"
-                            cursor.execute(check_sql, (result['search_id'], normalized))
-                            existing = cursor.fetchone()
-                            if not existing:
-                                insert_category_sql = "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)"
-                                cursor.execute(insert_category_sql, (result['search_id'], normalized, 'SEARCH_KEYWORD'))
-                    except Exception as cat_err:
-                        print("⚠️ First-message category extract/insert error:", cat_err)
-                    db.commit()
-                    
-                    return jsonify({
-                        'status': 'success',
-                        'search_id': result['search_id'],
-                        'chat_id': chat_entry['chat_id'],
-                        'timestamp': result['timestamp'].isoformat() if result['timestamp'] else None,
-                        'is_first_message': True
-                    })
+                    INSERT INTO "conversationHistory" (user_id, search_id, query_text, response_text)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING chat_id, timestamp
+                    """,
+                    (session['user_db_id'], search_id_to_use, message, '')
+                )
+                chat_result = cursor.fetchone()
+                
+                # Extract and store categories
+                try:
+                    chat_categories = extract_categories_from_search(message)
+                    normalized_seen = set()
+                    for category in chat_categories:
+                        normalized = re.sub(r"\s+", " ", (category or "").strip().lower())
+                        if not normalized or normalized in normalized_seen:
+                            continue
+                        normalized_seen.add(normalized)
+                        
+                        cursor.execute(
+                            "SELECT category_id FROM categories WHERE search_id = %s AND LOWER(TRIM(entity_text)) = %s",
+                            (search_id_to_use, normalized)
+                        )
+                        if not cursor.fetchone():
+                            cursor.execute(
+                                "INSERT INTO categories (search_id, entity_text, entity_label) VALUES (%s, %s, %s)",
+                                (search_id_to_use, normalized, 'SEARCH_KEYWORD')
+                            )
+                except Exception as cat_err:
+                    print(f"⚠️ Category extraction error: {cat_err}")
+                
+                db.commit()
+                
+                return jsonify({
+                    'status': 'success',
+                    'search_id': search_id_to_use,
+                    'chat_id': chat_result['chat_id'],
+                    'timestamp': chat_result['timestamp'].isoformat() if chat_result['timestamp'] else None,
+                    'is_first_message': is_first_message
+                })
                 
     except Exception as e:
-        print("❌ Send chat message error:", e)
-        return jsonify({'status': 'error', 'message': 'Failed to save message'}), 500
-    
+        print(f"❌ Send chat message error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': f'Failed to save message: {str(e)}'}), 500
+
+
+@app.route('/api/chat/followup', methods=['POST'])
+def generate_followup_message():
+    """Generate a follow-up response using stored search context."""
+    try:
+        if 'user_db_id' not in session:
+            return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
+
+        data = request.get_json() or {}
+        message = (data.get('message') or '').strip()
+        search_id = data.get('search_id')
+
+        if not message:
+            return jsonify({'status': 'error', 'message': 'Message is required'}), 400
+
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                context = get_search_context(cursor, session['user_db_id'], search_id)
+                if not context or not context.get('result_id'):
+                    return jsonify({'status': 'error', 'message': 'No prior search context available'}), 400
+
+                metrics = calculate_source_metrics(context.get('results_raw'), context.get('summary'))
+                response_text = build_followup_response(message, context, metrics)
+
+                payload = {
+                    'query': context.get('query'),
+                    'summary': response_text,
+                    'sources': context.get('sources'),
+                    'accuracy': metrics,
+                    'trusted_count': metrics.get('trusted_count', 0),
+                    'total_count': metrics.get('total_count', 0),
+                    'result_id': context.get('result_id')
+                }
+
+                return jsonify({'status': 'success', 'response': payload})
+
+    except Exception as e:
+        print("❌ Follow-up generation error:", e)
+        return jsonify({'status': 'error', 'message': 'Failed to generate follow-up response'}), 500
+
 # Add this enhanced endpoint to app.py, replacing the existing /api/chat/history
 
 @app.route('/api/chat/history', methods=['GET'])
@@ -864,44 +1169,31 @@ def get_chat_history():
                     search_id = search['search_id']
                     
                     # Parse search results JSON
-                    results = []
-                    if search['search_results_json']:
-                        try:
-                            results = json.loads(search['search_results_json']) if isinstance(search['search_results_json'], str) else search['search_results_json']
-                        except:
-                            results = []
+                    results = parse_results_payload(search.get('search_results_json'))
+                    metrics = calculate_source_metrics(results, search.get('summary_text'))
                     
                     # Extract sources with trust indicators
                     sources = []
-                    trusted_count = 0
                     for result in results[:5]:
                         url = result.get('url', '')
-                        is_trusted = any(domain in url for domain in [
-                            'rappler.com', 'inquirer.net', 'verafiles.org',
-                            'philstar.com', 'abs-cbn.com', 'tsek.ph', 'wikipedia.org'
-                        ])
-                        if is_trusted:
-                            trusted_count += 1
+                        # Use verified field from scraper if available, otherwise check URL
+                        is_trusted = result.get('verified', result.get('is_trusted', False))
+                        if not is_trusted:
+                            # Fallback to URL check if verified field not present
+                            is_trusted = any(domain in url for domain in TRUSTED_DOMAINS)
                         
                         sources.append({
                             'title': result.get('title', 'Untitled'),
                             'url': url,
-                            'is_trusted': is_trusted
+                            'is_trusted': is_trusted,
+                            'verified': result.get('verified', is_trusted)  # Add verified field
                         })
-                    
-                    # Calculate accuracy
-                    total_count = len(sources)
-                    if total_count > 0:
-                        true_percent = int((trusted_count / total_count) * 100)
-                        false_percent = 100 - true_percent
-                    else:
-                        true_percent = 0
-                        false_percent = 0
                     
                     conversations[search_id] = {
                         'search_id': search_id,
                         'title': search['query_text'][:60] + ('...' if len(search['query_text']) > 60 else ''),
                         'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None,
+                        'search_query': search['query_text'],  # Store for duplicate detection
                         'messages': [
                             {
                                 'role': 'user',
@@ -914,10 +1206,11 @@ def get_chat_history():
                                 'summary': search['summary_text'] or 'Summary not available',
                                 'sources': sources,
                                 'accuracy': {
-                                    'true_percent': true_percent,
-                                    'false_percent': false_percent,
-                                    'trusted_count': trusted_count,
-                                    'total_count': total_count
+                                    'true_percent': metrics['true_percent'],
+                                    'false_percent': metrics['false_percent'],
+                                    'trusted_count': metrics['trusted_count'],
+                                    'total_count': metrics['total_count'],
+                                    'coverage_count': metrics['coverage_count']
                                 },
                                 'result_id': search['result_id'],
                                 'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None
@@ -931,20 +1224,26 @@ def get_chat_history():
                     if not search_id or search_id not in conversations:
                         continue
                     
-                        messages_to_add = [
-                            {
-                                'role': 'user',
-                                'content': chat['query_text'],
-                                'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
-                            }
-                        ]
-                        if chat.get('response_text') and chat['response_text'].strip():
-                            messages_to_add.append({
-                                'role': 'bot',
-                                'content': chat['response_text'],
-                                'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
-                            })
-                        conversations[search_id]['messages'].extend(messages_to_add)
+                    # Skip chat messages that match the search query text (to avoid duplicating the initial message)
+                    search_query = conversations[search_id].get('search_query', '')
+                    if chat['query_text'].strip().lower() == search_query.strip().lower():
+                        # This is the initial search message, already represented by the search
+                        continue
+                    
+                    messages_to_add = [
+                        {
+                            'role': 'user',
+                            'content': chat['query_text'],
+                            'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
+                        }
+                    ]
+                    if chat.get('response_text') and chat['response_text'].strip():
+                        messages_to_add.append({
+                            'role': 'bot',
+                            'content': chat['response_text'],
+                            'timestamp': chat['timestamp'].isoformat() if chat['timestamp'] else None
+                        })
+                    conversations[search_id]['messages'].extend(messages_to_add)
                 
                 # Convert to list and sort by timestamp
                 conversation_list = list(conversations.values())
@@ -996,22 +1295,44 @@ def update_chat_response(chat_id):
 
 @app.route('/api/chat/clear', methods=['DELETE'])
 def clear_chat_history():
-    """Clear all chat history for the current user"""
+    """Clear all chat history, searches, and related data for the current user"""
     try:
         if 'user_db_id' not in session:
             return jsonify({'status': 'error', 'message': 'User not logged in'}), 401
         
         with get_db_connection() as db:
             with db.cursor() as cursor:
+                # Get all search_ids for this user first
+                cursor.execute("""
+                    SELECT search_id FROM searches WHERE account_id = %s
+                """, (session['user_db_id'],))
+                search_ids = [row['search_id'] for row in cursor.fetchall()]
+                
+                # Delete all categories for this user's searches
+                if search_ids:
+                    cursor.execute("""
+                        DELETE FROM categories 
+                        WHERE search_id = ANY(%s)
+                    """, (search_ids,))
+                
                 # Delete all chat history for this user
-                delete_sql = "DELETE FROM \"conversationHistory\" WHERE user_id = %s"
-                cursor.execute(delete_sql, (session['user_db_id'],))
+                cursor.execute("""
+                    DELETE FROM "conversationHistory" WHERE user_id = %s
+                """, (session['user_db_id'],))
+                
+                # Delete all searches for this user
+                cursor.execute("""
+                    DELETE FROM searches WHERE account_id = %s
+                """, (session['user_db_id'],))
+                
                 db.commit()
                 
                 return jsonify({'status': 'success', 'message': 'Chat history cleared'})
                 
     except Exception as e:
         print("❌ Clear chat history error:", e)
+        import traceback
+        traceback.print_exc()
         return jsonify({'status': 'error', 'message': 'Failed to clear chat history'}), 500
     
 @app.route('/api/get-bot-response/<int:result_id>', methods=['GET'])
@@ -1043,42 +1364,25 @@ def get_bot_response(result_id):
                     return jsonify({'status': 'error', 'message': 'Response not found'}), 404
                 
                 # Parse results JSON (contains all 5 scraped articles)
-                import json
-                results = json.loads(data['results']) if isinstance(data['results'], str) else data['results']
+                results = parse_results_payload(data['results'])
+                metrics = calculate_source_metrics(results, data['summary_text'])
                 
                 # Extract top 5 sources with URLs and titles
                 sources = []
                 for result in results[:5]:
                     url = result.get('url', '#')
-                    # Check if source is trusted
-                    is_trusted = any(domain in url for domain in [
-                        'rappler.com', 'inquirer.net', 'verafiles.org', 
-                        'philstar.com', 'abs-cbn.com', 'tsek.ph', 'wikipedia.org'
-                    ])
+                    # Use verified field from scraper if available, otherwise check URL
+                    is_trusted = result.get('verified', result.get('is_trusted', False))
+                    if not is_trusted:
+                        # Fallback to URL check if verified field not present
+                        is_trusted = any(domain in url for domain in TRUSTED_DOMAINS)
                     
                     sources.append({
                         'title': result.get('title') or url.split('/')[2] if url != '#' else 'Unknown Source',
                         'url': url,
-                        'is_trusted': is_trusted
+                        'is_trusted': is_trusted,
+                        'verified': result.get('verified', is_trusted)  # Add verified field
                     })
-                
-                # Calculate accuracy based on trusted sources
-                trusted_count = sum(1 for s in sources if s['is_trusted'])
-                total_count = len(sources)
-                
-                if total_count == 0:
-                    accuracy_percent = 0
-                else:
-                    accuracy_percent = int((trusted_count / total_count) * 100)
-                
-                # Adjust accuracy based on summary warnings
-                summary_lower = data['summary_text'].lower()
-                if '⚠️' in data['summary_text'] or 'unverified' in summary_lower:
-                    accuracy_percent = max(30, accuracy_percent - 20)
-                elif '❌' in data['summary_text'] or 'no results' in summary_lower:
-                    accuracy_percent = 0
-                elif 'could not extract' in summary_lower:
-                    accuracy_percent = max(20, accuracy_percent - 30)
                 
                 return jsonify({
                     'status': 'success',
@@ -1086,11 +1390,12 @@ def get_bot_response(result_id):
                     'summary': data['summary_text'],
                     'sources': sources,
                     'accuracy': {
-                        'true_percent': accuracy_percent,
-                        'false_percent': 100 - accuracy_percent
+                        'true_percent': metrics['true_percent'],
+                        'false_percent': metrics['false_percent']
                     },
-                    'trusted_count': trusted_count,
-                    'total_count': total_count
+                    'trusted_count': metrics['trusted_count'],
+                    'total_count': metrics['total_count'],
+                    'coverage_count': metrics['coverage_count']
                 })
                 
     except Exception as e:
@@ -1220,24 +1525,58 @@ def delete_conversation(search_id):
         with get_db_connection() as db:
             with db.cursor() as cursor:
                 # Verify ownership
-                cursor.execute("""
-                    SELECT search_id FROM searches 
-                    WHERE search_id = %s AND account_id = %s
-                """, (search_id, session['user_db_id']))
+                cursor.execute(
+                    "SELECT search_id FROM searches WHERE search_id = %s AND account_id = %s",
+                    (search_id, session['user_db_id'])
+                )
                 
                 if not cursor.fetchone():
                     return jsonify({'status': 'error', 'message': 'Conversation not found'}), 404
+                
+                # Get the search timestamp to match chat messages by time window
+                cursor.execute("""
+                    SELECT timestamp FROM searches 
+                    WHERE search_id = %s AND account_id = %s
+                """, (search_id, session['user_db_id']))
+                search_data = cursor.fetchone()
+                
+                if not search_data:
+                    return jsonify({'status': 'error', 'message': 'Conversation not found'}), 404
+                
+                search_timestamp = search_data['timestamp']
                 
                 # Delete related categories
                 cursor.execute("""
                     DELETE FROM categories WHERE search_id = %s
                 """, (search_id,))
                 
-                # Delete related chat messages
+                # Delete related chat messages - match by timestamp window (chats created after this search and before next search)
+                # First, get the next search timestamp (if any)
                 cursor.execute("""
-                    DELETE FROM "conversationHistory" 
-                    WHERE search_id = %s AND user_id = %s
-                """, (search_id, session['user_db_id']))
+                    SELECT timestamp FROM searches 
+                    WHERE account_id = %s 
+                    AND timestamp > %s
+                    ORDER BY timestamp ASC
+                    LIMIT 1
+                """, (session['user_db_id'], search_timestamp))
+                next_search = cursor.fetchone()
+                next_timestamp = next_search['timestamp'] if next_search else None
+                
+                # Delete conversationHistory entries that match this search by timestamp window
+                if next_timestamp:
+                    cursor.execute("""
+                        DELETE FROM "conversationHistory" 
+                        WHERE user_id = %s 
+                        AND timestamp >= %s 
+                        AND timestamp < %s
+                    """, (session['user_db_id'], search_timestamp, next_timestamp))
+                else:
+                    # If this is the most recent search, delete all chats after this search timestamp
+                    cursor.execute("""
+                        DELETE FROM "conversationHistory" 
+                        WHERE user_id = %s 
+                        AND timestamp >= %s
+                    """, (session['user_db_id'], search_timestamp))
                 
                 # Delete the search itself
                 cursor.execute("""

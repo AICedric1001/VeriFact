@@ -1,5 +1,5 @@
 from scraper import search_serpapi, extract_article_text
-from gemini import summarize_with_gemini
+from gemini import summarize_with_gemini, respond_with_gemini
 from trusted_sources import FILTERED_DOMAINS
 
 def generate_summary_from_text(post_text, serpapi_key=None):
@@ -54,6 +54,42 @@ def generate_summary_from_text(post_text, serpapi_key=None):
         "trusted_sources": trusted_links,
         "unverified_sources": unverified_links
     }
+
+
+def generate_followup_reply(followup_prompt, context_summary=None, sources=None, metrics=None):
+    """Use Gemini to craft a follow-up response grounded on stored context."""
+    context_blocks = []
+    if context_summary:
+        context_blocks.append(f"Stored summary:\n{context_summary.strip()}")
+
+    if sources:
+        formatted_sources = []
+        for src in sources[:5]:
+            title = src.get('title') or 'Untitled source'
+            url = src.get('url') or ''
+            trust_flag = 'trusted' if src.get('is_trusted') else 'unverified'
+            formatted_sources.append(f"- {title} ({trust_flag}) {url}")
+        if formatted_sources:
+            context_blocks.append("Key sources:\n" + "\n".join(formatted_sources))
+
+    if metrics:
+        context_blocks.append(
+            f"Credibility score: {metrics.get('true_percent', 0)}% "
+            f"based on {metrics.get('trusted_count', 0)} trusted sources out of "
+            f"{metrics.get('total_count', 0)} total references."
+        )
+
+    context_text = "\n\n".join(context_blocks).strip() or "No reliable summary was stored."
+
+    prompt = (
+        "You are VeriFact, a fact-checking assistant. Use the provided context to answer the user's follow-up.\n"
+        "If the answer cannot be derived from the context, clearly state the limitation and suggest the user rerun a fresh search.\n\n"
+        f"Context:\n{context_text}\n\n"
+        f"User follow-up prompt:\n{followup_prompt}\n\n"
+        "Respond in a concise paragraph (max 180 words), referencing any relevant sources by name when possible."
+    )
+
+    return respond_with_gemini(prompt)
 
 if __name__ == "__main__":
     test_text = "Misinformation during the 2022 Philippine elections"

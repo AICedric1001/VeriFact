@@ -87,38 +87,183 @@ const textarea = document.querySelector('.chat-input textarea');
     return existing ? existing.length : 0;
   })();
 
-  // Save a bot response into the Archived Modal (UI + optional backend)
-  function saveResponseToArchive(botMsg) {
-    if (!botMsg) return;
+  const ARCHIVE_STORAGE_BASE_KEY = 'verifact_archived_responses_v2';
+  const ARCHIVE_DEFAULT_USER = 'guest';
+  window.__verifactCurrentUserUuid = window.__verifactCurrentUserUuid || ARCHIVE_DEFAULT_USER;
+  window.__verifactCurrentUsername = window.__verifactCurrentUsername || '';
+  let archiveUserContextInitialized = false;
 
-    const title = botMsg.querySelector('.resp-title-text') ? botMsg.querySelector('.resp-title-text').textContent.trim() : (botMsg.querySelector('.response-title') ? botMsg.querySelector('.response-title').textContent.trim() : 'Untitled');
-    const summary = botMsg.querySelector('.resp-summary') ? botMsg.querySelector('.resp-summary').textContent.trim() : '';
-    // Get sources from sources panel instead of chat message
-    const sourcesList = document.getElementById('sourcesList');
-    const sourcesEls = sourcesList ? sourcesList.querySelectorAll('li:not(.placeholder)') : [];
-    const sources = Array.from(sourcesEls).map(li => {
-      const link = li.querySelector('a');
-      return link ? link.textContent.trim() : li.textContent.trim();
-    }).slice(0, 5);
-
-    const archived = JSON.parse(localStorage.getItem('verifact_archived_responses') || '[]');
-    const archiveId = 'arch-' + Date.now();
-    archived.push({id: archiveId, title: title, summary: summary, sources: sources, timestamp: new Date().toISOString()});
-    localStorage.setItem('verifact_archived_responses', JSON.stringify(archived));
+  function setArchiveUserContext(uuid) {
+    const normalized = uuid || ARCHIVE_DEFAULT_USER;
+    const shouldDispatch = archiveUserContextInitialized && window.__verifactCurrentUserUuid !== normalized;
+    window.__verifactCurrentUserUuid = normalized;
+    archiveUserContextInitialized = true;
+    if (shouldDispatch) {
+      document.dispatchEvent(new CustomEvent('verifact:archive-user-changed', {
+        detail: { uuid: normalized }
+      }));
+    }
   }
 
-  function saveResponseToSidebar(botMsg) {
+  function getArchiveStorageKey() {
+    const activeUuid = window.__verifactCurrentUserUuid || ARCHIVE_DEFAULT_USER;
+    return `${ARCHIVE_STORAGE_BASE_KEY}_${activeUuid}`;
+  }
+
+  function readArchivedResponsesFromStorage() {
+    try {
+      const raw = localStorage.getItem(getArchiveStorageKey());
+      if (!raw) {
+        return [];
+      }
+      return JSON.parse(raw);
+    } catch (err) {
+      console.warn('Failed to read archived responses', err);
+      return [];
+    }
+  }
+
+  function writeArchivedResponsesToStorage(entries = []) {
+    try {
+      localStorage.setItem(getArchiveStorageKey(), JSON.stringify(entries || []));
+    } catch (err) {
+      console.warn('Failed to persist archived responses', err);
+    }
+  }
+
+  // Expose helpers globally for other modules (archive.js, chatfunction.js)
+  window.setArchiveUserContext = setArchiveUserContext;
+  window.getArchiveStorageKey = getArchiveStorageKey;
+  window.readArchivedResponses = readArchivedResponsesFromStorage;
+  window.writeArchivedResponses = writeArchivedResponsesToStorage;
+
+  setArchiveUserContext(window.__verifactCurrentUserUuid);
+
+  window.__verifactLatestSources = window.__verifactLatestSources || [];
+
+  function normalizeSources(rawSources = [], limit = 5) {
+    const normalized = rawSources.map(src => {
+      if (!src) return null;
+      if (typeof src === 'string') {
+        const str = src.trim();
+        return str ? { label: str } : null;
+      }
+      if (typeof src !== 'object') {
+        return null;
+      }
+      const label = (src.label || src.title || src.name || src.source || src.url || '').trim();
+      const url = (src.url || src.href || src.link || '').trim();
+      const item = {
+        label: label || (url || 'Source')
+      };
+      if (url) {
+        item.url = url;
+      }
+      if (src.is_trusted !== undefined) {
+        item.is_trusted = !!src.is_trusted;
+      } else if (src.isTrusted !== undefined) {
+        item.is_trusted = !!src.isTrusted;
+      }
+      return item;
+    }).filter(Boolean);
+    return typeof limit === 'number' ? normalized.slice(0, limit) : normalized;
+  }
+
+  function collectSources(limit = 5) {
+    const sourcesList = document.getElementById('sourcesList');
+    const sourcesEls = sourcesList ? sourcesList.querySelectorAll('li:not(.placeholder)') : [];
+    const raw = Array.from(sourcesEls).map(li => {
+      const dataUrl = (li.dataset && li.dataset.url) ? li.dataset.url : null;
+      const dataLabel = (li.dataset && li.dataset.label) ? li.dataset.label : null;
+      const isTrustedAttr = li.dataset && li.dataset.isTrusted;
+      const isTrusted = isTrustedAttr === 'true' ? true : isTrustedAttr === 'false' ? false : undefined;
+
+      if (dataUrl) {
+        return {
+          label: (dataLabel || dataUrl).trim(),
+          url: dataUrl,
+          is_trusted: isTrusted
+        };
+      }
+
+      const link = li.querySelector && li.querySelector('a');
+      if (link && link.href) {
+        const label = (link.textContent || link.href).trim();
+        return {
+          label: label || link.href,
+          url: link.href,
+          is_trusted: isTrusted
+        };
+      }
+
+      const text = (dataLabel || li.textContent || '').trim();
+      if (!text) return null;
+      const entry = { label: text };
+      if (isTrusted !== undefined) {
+        entry.is_trusted = isTrusted;
+      }
+      return entry;
+    }).filter(Boolean);
+    return normalizeSources(raw, limit);
+  }
+
+  function resolveSourcesForArchive(botMsg, responseSources, limit = 5) {
+    if (Array.isArray(responseSources) && responseSources.length > 0) {
+      return normalizeSources(responseSources, limit);
+    }
+    if (botMsg && Array.isArray(botMsg._sourcesForArchive) && botMsg._sourcesForArchive.length > 0) {
+      return normalizeSources(botMsg._sourcesForArchive, limit);
+    }
+    if (Array.isArray(window.__verifactLatestSources) && window.__verifactLatestSources.length > 0) {
+      return normalizeSources(window.__verifactLatestSources, limit);
+    }
+    return collectSources(limit);
+  }
+
+  function renderSourcesHtml(sources = []) {
+    return sources.map(source => formatSourceHtml(source)).join('');
+  }
+
+  function formatSourceHtml(source) {
+    if (!source) return '';
+    if (typeof source === 'string') {
+      return `<li>${escapeHtml(source)}</li>`;
+    }
+    const label = escapeHtml(source.label || source.url || 'Source');
+    const url = source.url ? escapeAttr(source.url) : null;
+    if (url) {
+      return `<li><a href="${url}" target="_blank" rel="noopener">${label}</a></li>`;
+    }
+    return `<li>${label}</li>`;
+  }
+
+  // Save a bot response into the Archived Modal (UI + optional backend)
+  function saveResponseToArchive(botMsg, responseSources = null) {
     if (!botMsg) return;
 
     const title = botMsg.querySelector('.resp-title-text') ? botMsg.querySelector('.resp-title-text').textContent.trim() : (botMsg.querySelector('.response-title') ? botMsg.querySelector('.response-title').textContent.trim() : 'Untitled');
     const summary = botMsg.querySelector('.resp-summary') ? botMsg.querySelector('.resp-summary').textContent.trim() : '';
-    // Get sources from sources panel instead of chat message
-    const sourcesList = document.getElementById('sourcesList');
-    const sourcesEls = sourcesList ? sourcesList.querySelectorAll('li:not(.placeholder)') : [];
-    const sources = Array.from(sourcesEls).map(li => {
-      const link = li.querySelector('a');
-      return link ? link.textContent.trim() : li.textContent.trim();
-    }).slice(0, 5);
+    const sources = resolveSourcesForArchive(botMsg, responseSources, 5);
+
+    const archived = readArchivedResponsesFromStorage();
+    const archiveId = 'arch-' + Date.now();
+    archived.push({
+      id: archiveId,
+      title: title,
+      summary: summary,
+      sources: sources,
+      timestamp: new Date().toISOString(),
+      owner_uuid: window.__verifactCurrentUserUuid || ARCHIVE_DEFAULT_USER
+    });
+    writeArchivedResponsesToStorage(archived);
+  }
+
+  function saveResponseToSidebar(botMsg, responseSources = null) {
+    if (!botMsg) return;
+
+    const title = botMsg.querySelector('.resp-title-text') ? botMsg.querySelector('.resp-title-text').textContent.trim() : (botMsg.querySelector('.response-title') ? botMsg.querySelector('.response-title').textContent.trim() : 'Untitled');
+    const summary = botMsg.querySelector('.resp-summary') ? botMsg.querySelector('.resp-summary').textContent.trim() : '';
+    const sources = resolveSourcesForArchive(botMsg, responseSources, 5);
 
     // Create sidebar accordion item
     const accordion = document.querySelector('.sidebar-content .accordion');
@@ -141,7 +286,7 @@ const textarea = document.querySelector('.chat-input textarea');
       <div class="accordion-content">
         <p class="sidebar-summary">${escapeHtml(summary)}</p>
         <ul class="sidebar-sources">
-          ${sources.map(s => `<li>${escapeHtml(s)}</li>`).join('')}
+          ${renderSourcesHtml(sources)}
         </ul>
       </div>
     `;
@@ -190,15 +335,21 @@ const textarea = document.querySelector('.chat-input textarea');
 
   function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>"]+/g, function(match) {
+    return str.replace(/[&<>"']/g, function(match) {
       switch(match) {
         case '&': return '&amp;';
         case '<': return '&lt;';
         case '>': return '&gt;';
         case '"': return '&quot;';
+        case '\'': return '&#39;';
         default: return match;
       }
     });
+  }
+
+  function escapeAttr(str) {
+    if (!str) return '';
+    return escapeHtml(str);
   }
 
   // Initialize interactions for a newly added sidebar accordion item
@@ -482,10 +633,51 @@ const textarea = document.querySelector('.chat-input textarea');
           return res.json().then(function(json) { return { ok: res.ok, json: json }; });
         }).then(function(result) {
           if (result.ok) {
+            // Clear chat manager state
+            if (window.chatManager) {
+              window.chatManager.conversations = {};
+              window.chatManager.currentConversationId = null;
+              window.chatManager.selectedConversations.clear();
+              window.chatManager.pendingMessage = null;
+            }
+            
+            // Clear chat UI
+            const chatBox = document.getElementById('chatBox');
+            if (chatBox) chatBox.innerHTML = '';
+            
+            // Show empty state
+            const emptyState = document.querySelector('.empty-state');
+            if (emptyState) emptyState.style.display = 'flex';
+            
+            // Reset chat input
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+              chatInput.classList.remove('bottom');
+              chatInput.classList.add('centered');
+              const textarea = chatInput.querySelector('textarea');
+              if (textarea) textarea.value = '';
+            }
+            
+            // Clear sources
+            const sourcesList = document.getElementById('sourcesList');
+            if (sourcesList) {
+              sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
+            }
+            
+            // Clear sidebar
+            const chatHistory = document.querySelector('.chat-history');
+            if (chatHistory) {
+              chatHistory.innerHTML = '<div class="no-chats">No chat history</div>';
+            }
+            
             // Reset username display
             const userDisplayName = document.getElementById('userDisplayName');
             if (userDisplayName) {
               userDisplayName.textContent = 'Sign In';
+            }
+
+            if (typeof window.setArchiveUserContext === 'function') {
+              window.setArchiveUserContext(ARCHIVE_DEFAULT_USER);
             }
             
             // Redirect to auth page after successful logout
@@ -500,6 +692,9 @@ const textarea = document.querySelector('.chat-input textarea');
           const userDisplayName = document.getElementById('userDisplayName');
           if (userDisplayName) {
             userDisplayName.textContent = 'Sign In';
+          }
+          if (typeof window.setArchiveUserContext === 'function') {
+            window.setArchiveUserContext(ARCHIVE_DEFAULT_USER);
           }
           
           // Still redirect even if API call fails
@@ -574,6 +769,15 @@ document.addEventListener('DOMContentLoaded', () => {
       syncChatInputHeight();
     }
   });
+
+  // Add Enter key functionality to send message
+textarea.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault(); // Prevent new line
+        const sendEvent = new Event('click');
+        sendBtn.dispatchEvent(sendEvent); // Trigger the send button click
+    }
+});
 
   // ensure sync at startup
   syncChatInputHeight();

@@ -26,16 +26,41 @@
 
     list.innerHTML = '';
 
+    if (Array.isArray(sources)) {
+      window.__verifactLatestSources = sources.map(source => {
+        if (!source || typeof source !== 'object') return source;
+        return { ...source };
+      });
+    } else {
+      window.__verifactLatestSources = [];
+    }
+
     if (!sources.length) {
       const placeholder = document.createElement('li');
       placeholder.className = 'placeholder';
       placeholder.textContent = 'No sources yet.';
+      window.__verifactLatestSources = [];
       list.appendChild(placeholder);
       return;
     }
 
     sources.forEach((source) => {
       const item = document.createElement('li');
+    if (source.label) {
+      item.dataset.label = source.label;
+    } else {
+      delete item.dataset.label;
+    }
+    if (source.url) {
+      item.dataset.url = source.url;
+    } else {
+      delete item.dataset.url;
+    }
+    if (source.is_trusted !== undefined) {
+      item.dataset.isTrusted = source.is_trusted ? 'true' : 'false';
+    } else {
+      delete item.dataset.isTrusted;
+    }
       if (source.url) {
         const link = document.createElement('a');
         link.href = source.url;
