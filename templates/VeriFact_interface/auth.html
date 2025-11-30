@@ -26,9 +26,9 @@
         </main>
 
         <footer class="footer-links">
-            <a href="#" class="link">Terms and Conditions</a>
+            <a href="#" class="link" id="openTerms">Terms and Conditions</a>
             <span class="divider">|</span>
-            <a href="#" class="link">Data Privacy</a>
+            <a href="#" class="link" id="openPrivacy">Data Privacy</a>
         </footer>
 
     </div>
@@ -83,8 +83,239 @@
                     </div>
                     </label>
 
+                <div class="form-row terms-checkbox">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="agree_terms" required>
+                        <span class="checkmark"></span>
+                        <span class="checkbox-text">
+                            I agree to the <a href="#" id="openTermsFromSignup">Terms and Conditions</a> and <a href="#" id="openPrivacyFromSignup">Data Privacy Policy</a>
+                        </span>
+                    </label>
+                </div>
+
                 <button class="btn btn-auth" type="submit">Create account</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Terms and Conditions Modal -->
+    <div id="termsModal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="termsTitle">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title" id="termsTitle">Terms and Conditions</h3>
+                <button class="modal-close" type="button" aria-label="Close" data-close>×</button>
+            </div>
+            <div class="modal-body modal-scrollable">
+                <div class="terms-content">
+                    <div class="terms-section">
+                        <h4>1. Acceptance of Terms</h4>
+                        <p>By creating an account and using VeriFact, you agree to these Terms and Conditions. If you do not agree, please do not use our service.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h4>2. Account Responsibilities</h4>
+                        <p>You are responsible for:</p>
+                        <ul>
+                            <li>Maintaining the confidentiality of your account credentials</li>
+                            <li>All activities that occur under your account</li>
+                            <li>Providing accurate and truthful information</li>
+                            <li>Not sharing your account access with others</li>
+                        </ul>
+                    </div>
+
+                    <div class="terms-section">
+                        <h4>3. VeriFact Services</h4>
+                        <p>VeriFact is a news aggregation service that provides:</p>
+                        <ul>
+                            <li>News aggregation from multiple sources</li>
+                            <li>Curated verified sources with credibility indicators</li>
+                            <li>Access to unverified sources outside our filtering system</li>
+                            <li>Source categorization and topic organization</li>
+                            <li>Search functionality across aggregated content</li>
+                        </ul>
+                        <p><strong>Important:</strong> VeriFact aggregates news content but does not fact-check or verify the accuracy of individual articles. We provide source credibility indicators to help you make informed decisions.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h4>4. Prohibited Uses</h4>
+                        <p>You agree not to use VeriFact to:</p>
+                        <ul>
+                            <li>Republish content without proper attribution</li>
+                            <li>Attempt to manipulate or spam the aggregation system</li>
+                            <li>Use the service for illegal or harmful activities</li>
+                            <li>Scrape or extract our entire database of sources</li>
+                            <li>Misrepresent source verification status</li>
+                        </ul>
+                    </div>
+
+                    <div class="terms-section">
+                        <h4>5. Content and Intellectual Property</h4>
+                        <p>VeriFact respects content ownership:</p>
+                        <ul>
+                            <li>All news content remains the property of original publishers</li>
+                            <li>Our source database and categorization system is proprietary</li>
+                            <li>You may not copy our source verification methodology</li>
+                            <li>Content is provided for personal, non-commercial use</li>
+                        </ul>
+                    </div>
+
+                    <div class="terms-section">
+                        <h4>6. Service Availability</h4>
+                        <p>VeriFact is provided "as is" and we do not guarantee:</p>
+                        <ul>
+                            <li>Uninterrupted or error-free service</li>
+                            <li>Real-time fact-checking capabilities</li>
+                            <li>Complete coverage of all possible topics</li>
+                        </ul>
+                        <p>We reserve the right to modify, suspend, or discontinue the service at any time.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h4>7. Limitation of Liability</h4>
+                        <p>VeriFact and its affiliates shall not be liable for any indirect, incidental, or consequential damages arising from your use of our news aggregation services, including but not limited to decisions made based on aggregated news content or source credibility indicators.</p>
+                        <p><strong>Important:</strong> We are not responsible for the accuracy, completeness, or reliability of news content from third-party sources. Source credibility indicators are provided for informational purposes only.</p>
+                    </div>
+
+                    <div class="terms-section">
+                        <h4>8. Changes to Terms</h4>
+                        <p>We may update these Terms from time to time. Continued use of VeriFact after changes constitutes acceptance of the new terms.</p>
+                    </div>
+
+                    <div class="terms-acceptance">
+                        <p><strong>By creating an account, you acknowledge that you have read, understood, and agree to be bound by these Terms and Conditions.</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Privacy Modal -->
+    <div id="privacyModal" class="modal" aria-hidden="true" role="dialog" aria-labelledby="privacyTitle">
+        <div class="modal-card modal-large">
+            <div class="modal-header">
+                <h3 class="modal-title" id="privacyTitle">Data Privacy Policy</h3>
+                <button class="modal-close" type="button" aria-label="Close" data-close>×</button>
+            </div>
+            <div class="modal-body modal-scrollable">
+                <div class="privacy-content">
+                    <div class="privacy-section">
+                        <h4>1. Our Privacy Commitment</h4>
+                        <p>At VeriFact, we take your privacy seriously. This policy explains how we collect, use, and protect your information when you use our news aggregation services.</p>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>2. Data We Collect</h4>
+                        <div class="data-types">
+                            <h5>Search & Query Data:</h5>
+                            <ul>
+                                <li>Your news search queries and topics</li>
+                                <li>Timestamps of your news searches</li>
+                                <li>Categories and topics you follow</li>
+                                <li>Source preferences and interactions</li>
+                            </ul>
+                            
+                            <h5>Account Information:</h5>
+                            <ul>
+                                <li>Username and account credentials</li>
+                                <li>Account creation and login timestamps</li>
+                                <li>News reading history and preferences</li>
+                                <li>Source verification settings</li>
+                            </ul>
+                            
+                            <h5>Usage Analytics:</h5>
+                            <ul>
+                                <li>Anonymous news reading patterns (no personal identifiers)</li>
+                                <li>Service performance metrics</li>
+                                <li>Error logs and system diagnostics</li>
+                                <li>Source popularity statistics</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>3. How We Use Your Data</h4>
+                        <p>We use your information to:</p>
+                        <ul>
+                            <li><strong>Provide Services:</strong> Aggregate and deliver news content based on your preferences</li>
+                            <li><strong>Personalize Content:</strong> Show relevant news sources and topics</li>
+                            <li><strong>Source Curation:</strong> Improve our verified source selection</li>
+                            <li><strong>Ensure Security:</strong> Detect and prevent fraudulent or abusive behavior</li>
+                            <li><strong>Analytics:</strong> Generate anonymous statistics to improve news aggregation</li>
+                        </ul>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>4. Data Protection Measures</h4>
+                        <p>We protect your data with:</p>
+                        <ul>
+                            <li><strong>Encryption:</strong> All data is encrypted in transit and at rest</li>
+                            <li><strong>Secure Access:</strong> Strict authentication and authorization controls</li>
+                            <li><strong>Limited Access:</strong> Only authorized personnel can access your data</li>
+                            <li><strong>Regular Audits:</strong> Security audits and vulnerability assessments</li>
+                            <li><strong>No Third Parties:</strong> We never sell or share your personal data with third parties</li>
+                        </ul>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>5. Data Retention</h4>
+                        <p>We retain your data as follows:</p>
+                        <ul>
+                            <li><strong>News Search History:</strong> Retained for 12 months to improve content recommendations</li>
+                            <li><strong>Account Data:</strong> Retained until you delete your account</li>
+                            <li><strong>Source Preferences:</strong> Retained until you change your preferences</li>
+                            <li><strong>Analytics Data:</strong> Anonymized and retained indefinitely for service improvement</li>
+                            <li><strong>System Logs:</strong> Retained for 90 days for security purposes</li>
+                        </ul>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>6. Your Privacy Rights</h4>
+                        <p>You have the right to:</p>
+                        <ul>
+                            <li><strong>Access:</strong> Request a copy of your personal data</li>
+                            <li><strong>Correct:</strong> Update inaccurate personal information</li>
+                            <li><strong>Delete:</strong> Request deletion of your account and associated data</li>
+                            <li><strong>Export:</strong> Download your search history and account data</li>
+                            <li><strong>Opt-out:</strong> Disable certain data collection features</li>
+                        </ul>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>7. Cookies and Tracking</h4>
+                        <p>VeriFact uses:</p>
+                        <ul>
+                            <li><strong>Essential Cookies:</strong> Required for login and session management</li>
+                            <li><strong>Preference Cookies:</strong> Remember your settings and preferences</li>
+                            <li><strong>Analytics Cookies:</strong> Anonymous usage statistics (optional)</li>
+                        </ul>
+                        <p>You can control cookie settings through your browser preferences.</p>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>8. International Data Transfers</h4>
+                        <p>Your data is stored and processed within our secure infrastructure. We do not transfer personal data outside our secure environment without your explicit consent.</p>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>9. Children's Privacy</h4>
+                        <p>VeriFact is not intended for children under 13. We do not knowingly collect personal information from children under 13.</p>
+                    </div>
+
+                    <div class="privacy-section">
+                        <h4>10. Contact Us</h4>
+                        <p>If you have privacy questions or need to exercise your rights:</p>
+                        <ul>
+                            <li>Email: privacy@verifact.com</li>
+                            <li>Response time: Within 30 days</li>
+                            <li>We will investigate and respond to all privacy concerns</li>
+                        </ul>
+                    </div>
+
+                    <div class="privacy-acceptance">
+                        <p><strong>By using VeriFact, you acknowledge that you have read and understood this Privacy Policy.</strong></p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

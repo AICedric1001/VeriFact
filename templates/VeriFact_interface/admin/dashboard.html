@@ -1,157 +1,128 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - VeriFact</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
-    <style>
-        .sidebar {
-            min-height: 100vh;
-            width: 250px;
-        }
-        .content {
-            margin-left: 250px;
-            padding: 20px;
-        }
-        .nav-link {
-            transition: all 0.3s;
-        }
-        .nav-link:hover {
-            background-color: #edf2f7;
-        }
-    </style>
-</head>
-<body class="bg-gray-100">
-    <div class="flex">
-        <!-- Sidebar -->
-        <div class="sidebar bg-white shadow-lg fixed h-full">
-            <div class="p-4 border-b">
-                <h1 class="text-xl font-bold">VeriFact Admin</h1>
-            </div>
-            <nav class="mt-4">
-                <a href="/admin/dashboard" class="block py-3 px-6 nav-link bg-blue-50 text-blue-600">
-                    <i class="fas fa-tachometer-alt mr-2"></i> Dashboard
-                </a>
-                <a href="/admin/articles" class="block py-3 px-6 nav-link">
-                    <i class="fas fa-newspaper mr-2"></i> Articles
-                </a>
-                <a href="/admin/users" class="block py-3 px-6 nav-link">
-                    <i class="fas fa-users mr-2"></i> Users
-                </a>
-                <a href="/admin/reviews" class="block py-3 px-6 nav-link">
-                    <i class="fas fa-star mr-2"></i> Reviews
-                </a>
-                <a href="/admin/settings" class="block py-3 px-6 nav-link">
-                    <i class="fas fa-cog mr-2"></i> Settings
-                </a>
-                <a href="/admin/logout" class="block py-3 px-6 nav-link text-red-600 hover:bg-red-50">
-                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
-                </a>
-            </nav>
+{% extends "VeriFact_interface/admin/base.html" %}
+
+{% block title %}Dashboard - Admin Panel{% endblock %}
+
+{% block content %}
+<!-- Key Metrics Only -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue">
+            <i class="fas fa-users"></i>
         </div>
-
-        <!-- Main Content -->
-        <div class="content w-full">
-            <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-2xl font-bold mb-6">Dashboard Overview</h2>
-                
-                <!-- Stats Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    <!-- Total Users Card -->
-                    <div class="bg-white overflow-hidden shadow-sm rounded-lg">
-                        <div class="p-6 bg-white border-b border-gray-200">
-                            <div class="flex items-center">
-                                <div class="p-3 rounded-full bg-blue-100 text-blue-600">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                    </svg>
-                                </div>
-                                <div class="ml-4">
-                                    <h3 class="text-lg font-medium text-gray-500">Total Users</h3>
-                                    <h3 class="text-2xl font-bold">{{ total_users|default(0) }}</h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Total Searches Card -->
-                    <div class="bg-white overflow-hidden shadow-sm rounded-lg">
-                        <div class="p-6 bg-white border-b border-gray-200">
-                            <div class="flex items-center">
-                                <div class="p-3 rounded-full bg-green-100 text-green-600">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                    </svg>
-                                </div>
-                                <div class="ml-4">
-                                    <h3 class="text-lg font-medium text-gray-500">Total Searches</h3>
-                                    <h3 class="text-2xl font-bold">
-                                        {{ search_stats.total_searches|default(0) }}
-                                    </h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Active Users Card -->
-                    <div class="bg-white overflow-hidden shadow-sm rounded-lg">
-                        <div class="p-6 bg-white border-b border-gray-200">
-                            <div class="flex items-center">
-                                <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                                    </svg>
-                                </div>
-                                <div class="ml-4">
-                                    <h3 class="text-lg font-medium text-gray-500">Active Users</h3>
-                                    <h3 class="text-2xl font-bold">
-                                        {{ search_stats.active_users|default(0) }}
-                                    </h3>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            
-            <!-- Recent Searches Section -->
-<div class="mt-6 bg-white rounded-lg border p-6">
-    <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-semibold">Recent Searches</h3>
-        <a href="/admin/searches" class="text-sm text-blue-600 hover:underline">View All</a>
+        <div class="stat-value">{{ analytics.user_stats.total_users if analytics and analytics.user_stats else 0 }}</div>
+        <div class="stat-label">Total Users</div>
+        <div class="stat-change positive">+{{ analytics.user_stats.new_today if analytics and analytics.user_stats else 0 }} today</div>
     </div>
-    <div class="space-y-4">
-        {% if recent_searches and recent_searches|length > 0 %}
-            {% for search in recent_searches %}
-            <div class="flex items-center p-3 hover:bg-gray-50 rounded">
-                <div class="p-2 bg-blue-100 text-blue-600 rounded-full">
-                    <i class="fas fa-search"></i>
+
+    <div class="stat-card">
+        <div class="stat-icon green">
+            <i class="fas fa-search"></i>
+        </div>
+        <div class="stat-value">{{ analytics.search_stats.total_searches if analytics and analytics.search_stats else 0 }}</div>
+        <div class="stat-label">Total Searches</div>
+        <div class="stat-change">{{ analytics.search_stats.searches_today if analytics and analytics.search_stats else 0 }} today</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <i class="fas fa-newspaper"></i>
+        </div>
+        <div class="stat-value">{{ analytics.content_stats.total_articles if analytics and analytics.content_stats else 0 }}</div>
+        <div class="stat-label">Articles</div>
+        <div class="stat-change">{{ analytics.content_stats.unique_sources if analytics and analytics.content_stats else 0 }} sources</div>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h3 class="card-title">System Status</h3>
+                <p class="card-subtitle">Platform health and performance metrics</p>
+            </div>
+            <span class="badge {% if system_health and system_health.database_status == 'healthy' %}badge-success{% else %}badge-warning{% endif %}">
+                {% if system_health and system_health.database_status == 'healthy' %}
+                    <i class="fas fa-check-circle"></i> All Systems Operational
+                {% else %}
+                    <i class="fas fa-exclamation-triangle"></i> Issues Detected
+                {% endif %}
+            </span>
+        </div>
+    </div>
+    <div style="padding: 1.5rem;">
+        <!-- Status Overview Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div style="text-align: center; padding: 1rem; background: var(--input-bg); border-radius: 12px; border: 1px solid rgba(34, 197, 94, 0.2);">
+                <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem; display: flex; align-items: center; justify-content: center; background: rgba(34, 197, 94, 0.1); border-radius: 50%; color: #22c55e;">
+                    <i class="fas fa-database" style="font-size: 1.25rem;"></i>
                 </div>
-                <div class="ml-4 flex-1 min-w-0">
-                    <p class="font-medium truncate">
-                        {{ search.query_text or 'No search query' }}
-                    </p>
-                    <p class="text-sm text-gray-500">
-                        {{ search.username or 'Guest' }}
-                        {% if search.timestamp %}
-                            - {{ search.timestamp|datetimeformat('%b %d, %H:%M') }}
-                        {% endif %}
-                    </p>
+                <div style="font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: 0.25rem;">
+                    {{ system_health.database_status if system_health else 'Unknown' }}
+                </div>
+                <div style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Database</div>
+            </div>
+            
+            <div style="text-align: center; padding: 1rem; background: var(--input-bg); border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.2);">
+                <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem; display: flex; align-items: center; justify-content: center; background: rgba(59, 130, 246, 0.1); border-radius: 50%; color: #3b82f6;">
+                    <i class="fas fa-clock" style="font-size: 1.25rem;"></i>
+                </div>
+                <div style="font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: 0.25rem;">24h</div>
+                <div style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Uptime</div>
+            </div>
+            
+            <div style="text-align: center; padding: 1rem; background: var(--input-bg); border-radius: 12px; border: 1px solid rgba(249, 194, 41, 0.2);">
+                <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem; display: flex; align-items: center; justify-content: center; background: rgba(249, 194, 41, 0.1); border-radius: 50%; color: #f59e0b;">
+                    <i class="fas fa-tachometer-alt" style="font-size: 1.25rem;"></i>
+                </div>
+                <div style="font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: 0.25rem;">&lt;200ms</div>
+                <div style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Response Time</div>
+            </div>
+            
+            <div style="text-align: center; padding: 1rem; background: var(--input-bg); border-radius: 12px; border: 1px solid rgba(168, 85, 247, 0.2);">
+                <div style="width: 48px; height: 48px; margin: 0 auto 0.75rem; display: flex; align-items: center; justify-content: center; background: rgba(168, 85, 247, 0.1); border-radius: 50%; color: #a855f7;">
+                    <i class="fas fa-chart-line" style="font-size: 1.25rem;"></i>
+                </div>
+                <div style="font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: 0.25rem;">{{ system_health.recent_activity if system_health else 0 }}</div>
+                <div style="font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;">Recent Activity</div>
+            </div>
+        </div>
+        
+        <!-- Issues Section -->
+        {% if system_health and system_health.error_indicators %}
+        <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(229, 57, 53, 0.05); border: 1px solid rgba(229, 57, 53, 0.2); border-radius: 12px;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: rgba(229, 57, 53, 0.1); border-radius: 50%; color: var(--brand-veri);">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div>
+                    <div style="font-size: 0.875rem; color: var(--brand-veri); font-weight: 600;">Issues Detected</div>
+                    <div style="font-size: 0.75rem; color: var(--muted);">Please review the following items</div>
                 </div>
             </div>
-            {% endfor %}
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                {% for indicator in system_health.error_indicators[:3] %}
+                <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: rgba(229, 57, 53, 0.05); border-radius: 6px;">
+                    <i class="fas fa-info-circle" style="color: var(--brand-veri); font-size: 0.75rem;"></i>
+                    <span style="font-size: 0.875rem; color: var(--text);">{{ indicator }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
         {% else %}
-            <p class="text-gray-500 text-center py-4">No recent searches found</p>
+        <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 12px; text-align: center;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+                <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: rgba(34, 197, 94, 0.1); border-radius: 50%; color: #22c55e;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div>
+                    <div style="font-size: 0.875rem; color: #22c55e; font-weight: 600;">All Systems Operational</div>
+                    <div style="font-size: 0.75rem; color: var(--muted);">No issues detected</div>
+                </div>
+            </div>
+        </div>
         {% endif %}
     </div>
 </div>
-    
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Any initialization code can go here
-            // Initialize any dashboard-specific JavaScript
-        });
-    </script>
-</body>
-</html>
+
+{% endblock %}

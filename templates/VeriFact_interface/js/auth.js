@@ -1,8 +1,14 @@
 (function() {
     var loginModal = document.getElementById('loginModal');
     var signupModal = document.getElementById('signupModal');
+    var termsModal = document.getElementById('termsModal');
+    var privacyModal = document.getElementById('privacyModal');
     var openLogin = document.getElementById('openLogin');
     var openSignup = document.getElementById('openSignup');
+    var openTerms = document.getElementById('openTerms');
+    var openPrivacy = document.getElementById('openPrivacy');
+    var openTermsFromSignup = document.getElementById('openTermsFromSignup');
+    var openPrivacyFromSignup = document.getElementById('openPrivacyFromSignup');
     var loginForm = loginModal ? loginModal.querySelector('form') : null;
     var signupForm = signupModal ? signupModal.querySelector('form') : null;
 
@@ -37,12 +43,28 @@
 
     if (openLogin) openLogin.addEventListener('click', function(){ open(loginModal); });
     if (openSignup) openSignup.addEventListener('click', function(){ open(signupModal); });
+    if (openTerms) openTerms.addEventListener('click', function(e){ 
+        e.preventDefault(); 
+        open(termsModal); 
+    });
+    if (openPrivacy) openPrivacy.addEventListener('click', function(e){ 
+        e.preventDefault(); 
+        open(privacyModal); 
+    });
+    if (openTermsFromSignup) openTermsFromSignup.addEventListener('click', function(e){ 
+        e.preventDefault(); 
+        open(termsModal); 
+    });
+    if (openPrivacyFromSignup) openPrivacyFromSignup.addEventListener('click', function(e){ 
+        e.preventDefault(); 
+        open(privacyModal); 
+    });
 
     document.querySelectorAll('[data-close]').forEach(function(btn){
         btn.addEventListener('click', function(){ close(btn.closest('.modal')); });
     });
 
-    [loginModal, signupModal].forEach(function(m){
+    [loginModal, signupModal, termsModal, privacyModal].forEach(function(m){
             if (!m) return;
             m.addEventListener('click', function(e){ if (e.target === m) close(m); });
         });
@@ -77,6 +99,16 @@
     function handleSubmit(form, url, isSignup = false) {
         form.addEventListener('submit', function(e){
             e.preventDefault();
+            
+            // For signup, validate terms checkbox
+            if (isSignup) {
+                const agreeCheckbox = form.querySelector('input[name="agree_terms"]');
+                if (!agreeCheckbox || !agreeCheckbox.checked) {
+                    showCustomNotification('You must agree to the Terms and Conditions and Data Privacy Policy to create an account.', 'error');
+                    return;
+                }
+            }
+            
             var body = toJSON(form);
             fetch(url, {
                 method: 'POST',

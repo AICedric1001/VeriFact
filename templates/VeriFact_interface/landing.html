@@ -232,7 +232,7 @@
         </div>
     </section>
 
-                <!-- Features Section -->
+    <!-- Features Section -->
     <section id="features" class="features">
         <div class="features-container">
             <div class="features-header">
@@ -551,6 +551,205 @@
                     ctx.fill();
                 });
             });
+        });
+    </script>
+    
+    <!-- Load Trending Searches -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load trending topics from the same endpoint as home.html
+            loadTrendingTopics();
+            
+            let carouselInterval;
+            let currentIndex = 0;
+            let trendingTopics = [];
+            
+            async function loadTrendingTopics() {
+                try {
+                    console.log('Loading trending topics...');
+                    const response = await fetch('/api/trending', {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    });
+                    
+                    console.log('Response status:', response.status);
+                    const data = await response.json();
+                    console.log('API response:', data);
+                    
+                    if (data.status === 'success' && data.trending && data.trending.length > 0) {
+                        console.log('Using real trending data:', data.trending);
+                        trendingTopics = data.trending;
+                        updateTopSearches(trendingTopics.slice(0, 6)); // First 6 for carousel
+                        updateTrendingTable(trendingTopics.slice(0, 10)); // First 10 for table
+                        startCarousel(); // Start automatic rotation
+                    } else {
+                        console.log('No trending data found, using fallback data');
+                        // Use fallback data when API returns empty
+                        const fallbackData = getFallbackTrendingData();
+                        trendingTopics = fallbackData;
+                        updateTopSearches(fallbackData.slice(0, 6));
+                        updateTrendingTable(fallbackData.slice(0, 10));
+                        startCarousel();
+                    }
+                } catch (error) {
+                    console.error('Error loading trending topics:', error);
+                    console.log('Using fallback data due to error');
+                    // Use fallback data when API fails
+                    const fallbackData = getFallbackTrendingData();
+                    trendingTopics = fallbackData;
+                    updateTopSearches(fallbackData.slice(0, 6));
+                    updateTrendingTable(fallbackData.slice(0, 10));
+                    startCarousel();
+                }
+            }
+            
+            function getFallbackTrendingData() {
+                return [
+                    { category: "COVID-19 vaccine safety", count: 2340 },
+                    { category: "election fraud claims", count: 1820 },
+                    { category: "climate change data", count: 1560 },
+                    { category: "AI deepfake videos", count: 1230 },
+                    { category: "crypto scam alerts", count: 987 },
+                    { category: "celebrity death rumors", count: 856 },
+                    { category: "inflation statistics 2024", count: 743 },
+                    { category: "social media misinformation", count: 698 },
+                    { category: "renewable energy progress", count: 612 },
+                    { category: "space exploration updates", count: 534 },
+                    { category: "cybersecurity threats", count: 489 },
+                    { category: "mental health awareness", count: 421 }
+                ];
+            }
+            
+            function startCarousel() {
+                // Clear any existing interval
+                if (carouselInterval) {
+                    clearInterval(carouselInterval);
+                }
+                
+                // Start carousel rotation
+                carouselInterval = setInterval(() => {
+                    rotateCarousel();
+                }, 3000); // Rotate every 3 seconds
+            }
+            
+            function rotateCarousel() {
+                const carouselContainer = document.querySelector('.searches-carousel');
+                if (!carouselContainer || trendingTopics.length === 0) return;
+                
+                const items = carouselContainer.querySelectorAll('.search-item');
+                if (items.length === 0) return;
+                
+                // Remove active class from all items
+                items.forEach(item => item.classList.remove('active'));
+                
+                // Move to next position
+                currentIndex = (currentIndex + 1) % items.length;
+                
+                // Add active class to current and next 2 items
+                for (let i = 0; i < 3; i++) {
+                    const index = (currentIndex + i) % items.length;
+                    items[index].classList.add('active');
+                }
+            }
+            
+            function updateTopSearches(trendingTopicsData) {
+                const carouselContainer = document.querySelector('.searches-carousel');
+                if (!carouselContainer) return;
+                
+                // Clear existing content and reset carousel
+                carouselContainer.innerHTML = '';
+                currentIndex = 0;
+                
+                // Create carousel track
+                const carouselTrack = document.createElement('div');
+                carouselTrack.className = 'carousel-track';
+                
+                // Add trending topic items as search cards
+                trendingTopicsData.forEach((topic, index) => {
+                    const searchCard = document.createElement('div');
+                    searchCard.className = 'search-card';
+                    
+                    // Format count
+                    const count = topic.count || 0;
+                    let formattedCount;
+                    if (count >= 1000) {
+                        formattedCount = (count / 1000).toFixed(1) + 'k';
+                    } else {
+                        formattedCount = count.toString();
+                    }
+                    
+                    searchCard.innerHTML = `
+                        <div class="search-text">${topic.category}</div>
+                        <div class="search-count">${formattedCount} searches</div>
+                    `;
+                    
+                    carouselTrack.appendChild(searchCard);
+                });
+                
+                // Add click functionality to search cards
+                carouselTrack.querySelectorAll('.search-card').forEach(card => {
+                    card.addEventListener('click', function() {
+                        const searchText = this.querySelector('.search-text').textContent;
+                        // You can add functionality to search for this topic
+                        console.log('Search for:', searchText);
+                    });
+                });
+                
+                carouselContainer.appendChild(carouselTrack);
+                
+                // Update total searches display
+                const totalSearchesElement = document.getElementById('totalSearches');
+                if (totalSearchesElement) {
+                    const total = trendingTopicsData.reduce((sum, topic) => sum + (topic.count || 0), 0);
+                    let formattedTotal;
+                    if (total >= 1000) {
+                        formattedTotal = (total / 1000).toFixed(1) + 'k';
+                    } else {
+                        formattedTotal = total.toString();
+                    }
+                    totalSearchesElement.textContent = formattedTotal;
+                }
+                
+                // Note: CSS handles the automatic scrolling animation
+                // The hover pause is already handled by CSS: .searches-carousel:hover .carousel-track
+            }
+            
+            function updateTrendingTable(trendingTopicsData) {
+                const tableBody = document.getElementById('trendingTableBody');
+                if (!tableBody) return;
+                
+                // Clear existing content
+                tableBody.innerHTML = '';
+                
+                trendingTopicsData.forEach((topic, index) => {
+                    const row = document.createElement('tr');
+                    
+                    // Rank with fire icon for top 3
+                    let rankHTML = '';
+                    if (index < 3) {
+                        rankHTML = `<span class="rank-fire">🔥 ${index + 1}</span>`;
+                    } else {
+                        rankHTML = `<span class="rank-number">${index + 1}</span>`;
+                    }
+                    
+                    // Format count
+                    const count = topic.count || 0;
+                    let formattedCount;
+                    if (count >= 1000) {
+                        formattedCount = (count / 1000).toFixed(1) + 'k';
+                    } else {
+                        formattedCount = count.toString();
+                    }
+                    
+                    row.innerHTML = `
+                        <td>${rankHTML}</td>
+                        <td>${topic.category}</td>
+                        <td>${formattedCount}</td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+            }
         });
     </script>
 </body>

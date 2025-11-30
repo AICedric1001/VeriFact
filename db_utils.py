@@ -504,26 +504,278 @@ class AdminDB:
             return []
 
     @staticmethod
+    def _execute_raw_query(query):
+        """Execute a raw query for debugging purposes."""
+        import psycopg2
+        import psycopg2.extras
+        
+        try:
+            conn = psycopg2.connect(
+                host="localhost",
+                user="postgres",
+                password="123",
+                database="websearch_demo",
+                cursor_factory=psycopg2.extras.RealDictCursor
+            )
+            cursor = conn.cursor()
+            cursor.execute(query)
+            
+            if query.strip().upper().startswith('SELECT'):
+                result = cursor.fetchall()
+                cursor.close()
+                conn.close()
+                return result
+            else:
+                conn.commit()
+                cursor.close()
+                conn.close()
+                return "Query executed successfully"
+        except Exception as e:
+            print(f"Raw query error: {e}")
+            return None
+
+    @staticmethod
     @with_db_connection
     def get_recent_searches(cursor, limit=5):
-        """Get recent searches with user information."""
+        """Get recent searches with user information from search_results table."""
         try:
             cursor.execute("""
                 SELECT 
-                    s.search_id, 
-                    s.query_text, 
-                    s.timestamp, 
-                    COALESCE(u.username, 'Guest') as username
-                FROM searches s
-                LEFT JOIN users u ON s.account_id = u.user_id
-                WHERE s.timestamp >= NOW() - INTERVAL '1 month'
-                ORDER BY s.timestamp DESC
+                    sr.result_id as search_id, 
+                    sr.query as query_text, 
+                    sr.created_at as timestamp,
+                    NULL as account_id,
+                    'System' as username
+                FROM "search_results" sr
+                ORDER BY sr.created_at DESC
                 LIMIT %s
             """, (limit,))
-            return cursor.fetchall()
+            results = cursor.fetchall()
+            print(f"Found {len(results)} recent searches from search_results")
+            return results
         except Exception as e:
             print(f"Error getting recent searches: {e}")
             return []
+
+    @staticmethod
+    @with_db_connection
+    def get_analytics_overview(cursor):
+        """Comprehensive analytics using existing tables"""
+        analytics = {
+            'user_stats': {},
+            'search_stats': {},
+            'content_stats': {},
+            'engagement_stats': {}
+        }
+        
+        # User statistics
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_users,
+                COUNT(*) FILTER (WHERE role = 'admin') as admin_count,
+                COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) as new_today,
+                COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as new_week
+            FROM users
+        """)
+        user_stats = cursor.fetchone()
+        analytics['user_stats'] = dict(user_stats)
+        
+        # Search statistics
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_searches,
+                COUNT(DISTINCT account_id) as unique_searchers,
+                COUNT(*) FILTER (WHERE timestamp >= CURRENT_DATE) as searches_today,
+                COUNT(*) FILTER (WHERE timestamp >= CURRENT_DATE - INTERVAL '7 days') as searches_week
+            FROM searches
+        """)
+        search_stats = cursor.fetchone()
+        analytics['search_stats'] = dict(search_stats)
+        
+        # Content statistics
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_articles,
+                COUNT(DISTINCT source_name) as unique_sources,
+                COUNT(*) FILTER (WHERE publication_date >= CURRENT_DATE - INTERVAL '30 days') as recent_articles
+            FROM articles
+        """)
+        content_stats = cursor.fetchone()
+        analytics['content_stats'] = dict(content_stats)
+        
+        # Engagement statistics
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as total_reviews,
+                AVG(rating) as avg_rating,
+                COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) as reviews_today
+            FROM userreview
+        """)
+        engagement_stats = cursor.fetchone()
+        analytics['engagement_stats'] = dict(engagement_stats)
+        
+        return analytics
+    
+    @staticmethod
+    @with_db_connection
+    def get_trending_searches(cursor, limit=10):
+        """Get most popular search queries from search_results table"""
+        cursor.execute("""
+            SELECT 
+                query as query_text,
+                COUNT(*) as search_count,
+                1 as unique_users
+            FROM "search_results"
+            WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+            GROUP BY query
+            ORDER BY search_count DESC
+            LIMIT %s
+        """, (limit,))
+        return cursor.fetchall()
+    
+    @staticmethod
+    @with_db_connection
+    def get_popular_categories(cursor, limit=15):
+        """Get most used categories"""
+        cursor.execute("""
+            SELECT 
+                entity_text,
+                COUNT(*) as usage_count,
+                COUNT(DISTINCT c.search_id) as unique_searches
+            FROM categories c
+            JOIN searches s ON c.search_id = s.search_id
+            WHERE s.timestamp >= CURRENT_DATE - INTERVAL '30 days'
+            GROUP BY entity_text
+            ORDER BY usage_count DESC
+            LIMIT %s
+        """, (limit,))
+        return cursor.fetchall()
+    
+    @staticmethod
+    @with_db_connection
+    def get_user_activity_summary(cursor, user_id):
+        """Get comprehensive user activity"""
+        activity = {
+            'searches': [],
+            'reviews': [],
+            'categories': []
+        }
+        
+        # User's searches
+        cursor.execute("""
+            SELECT search_id, query_text, timestamp
+            FROM searches
+            WHERE account_id = %s
+            ORDER BY timestamp DESC
+            LIMIT 10
+        """, (user_id,))
+        activity['searches'] = cursor.fetchall()
+        
+        # User's reviews
+        cursor.execute("""
+            SELECT review_id, rating, review_text, created_at
+            FROM userreview
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT 10
+        """, (user_id,))
+        activity['reviews'] = cursor.fetchall()
+        
+        # Categories from user's searches
+        cursor.execute("""
+            SELECT DISTINCT c.entity_text, COUNT(*) as usage_count
+            FROM categories c
+            JOIN searches s ON c.search_id = s.search_id
+            WHERE s.account_id = %s
+            GROUP BY c.entity_text
+            ORDER BY usage_count DESC
+            LIMIT 10
+        """, (user_id,))
+        activity['categories'] = cursor.fetchall()
+        
+        return activity
+    
+    @staticmethod
+    @with_db_connection
+    def get_source_analytics(cursor):
+        """Analyze article sources"""
+        cursor.execute("""
+            SELECT 
+                source_name,
+                COUNT(*) as article_count,
+                COUNT(DISTINCT result_id) as unique_results,
+                MAX(publication_date) as latest_article
+            FROM articles
+            GROUP BY source_name
+            ORDER BY article_count DESC
+            LIMIT 20
+        """)
+        return cursor.fetchall()
+    
+    @staticmethod
+    @with_db_connection
+    def get_daily_activity(cursor, days=30):
+        """Get daily activity trends"""
+        cursor.execute("""
+            SELECT 
+                DATE(created_at) as activity_date,
+                COUNT(*) as new_users
+            FROM users
+            WHERE created_at >= CURRENT_DATE - INTERVAL '%s days'
+            GROUP BY DATE(created_at)
+            ORDER BY activity_date DESC
+        """, (days,))
+        user_registrations = cursor.fetchall()
+        
+        cursor.execute("""
+            SELECT 
+                DATE(timestamp) as activity_date,
+                COUNT(*) as total_searches,
+                COUNT(DISTINCT account_id) as active_users
+            FROM searches
+            WHERE timestamp >= CURRENT_DATE - INTERVAL '%s days'
+            GROUP BY DATE(timestamp)
+            ORDER BY activity_date DESC
+        """, (days,))
+        search_activity = cursor.fetchall()
+        
+        return {
+            'user_registrations': user_registrations,
+            'search_activity': search_activity
+        }
+    
+    @staticmethod
+    @with_db_connection
+    def get_system_health(cursor):
+        """Basic system health metrics"""
+        health = {
+            'database_status': 'healthy',
+            'recent_activity': 0,
+            'error_indicators': []
+        }
+        
+        # Check recent activity (last hour)
+        cursor.execute("""
+            SELECT COUNT(*) as activity_count
+            FROM searches
+            WHERE timestamp >= NOW() - INTERVAL '1 hour'
+        """)
+        activity = cursor.fetchone()
+        health['recent_activity'] = activity['activity_count']
+        
+        # Check for potential issues
+        cursor.execute("""
+            SELECT 'users_without_searches' as issue, COUNT(*) as count
+            FROM users u
+            LEFT JOIN searches s ON u.user_id = s.account_id
+            WHERE s.search_id IS NULL
+            AND u.created_at <= CURRENT_DATE - INTERVAL '1 day'
+        """)
+        inactive_users = cursor.fetchone()
+        if inactive_users['count'] > 0:
+            health['error_indicators'].append(f"{inactive_users['count']} inactive users")
+        
+        return health
 
     @staticmethod
     @with_db_connection
@@ -555,3 +807,66 @@ class AdminDB:
             print(f"Error getting search statistics: {e}")
         
         return stats
+
+    @staticmethod
+    @with_db_connection
+    def get_user_stats(cursor):
+        """Get user statistics for admin dashboard."""
+        stats = {
+            'active_users': 0,
+            'admin_count': 0,
+            'new_users_30d': 0
+        }
+        
+        try:
+            # Get active users (users who performed searches in last 24 hours)
+            cursor.execute("""
+                SELECT COUNT(DISTINCT account_id) as count 
+                FROM searches 
+                WHERE timestamp >= NOW() - INTERVAL '24 hours'
+            """)
+            result = cursor.fetchone()
+            if result:
+                stats['active_users'] = result['count'] or 0
+            
+            # Get admin count
+            cursor.execute("SELECT COUNT(*) as count FROM users WHERE role = 'admin'")
+            result = cursor.fetchone()
+            if result:
+                stats['admin_count'] = result['count'] or 0
+            
+            # Get new users in last 30 days
+            cursor.execute("""
+                SELECT COUNT(*) as count 
+                FROM users 
+                WHERE created_at >= NOW() - INTERVAL '30 days'
+            """)
+            result = cursor.fetchone()
+            if result:
+                stats['new_users_30d'] = result['count'] or 0
+                
+        except Exception as e:
+            print(f"Error getting user stats: {e}")
+        
+        return stats
+    
+    @staticmethod
+    @with_db_connection
+    def get_daily_activity(cursor, days=30):
+        """Get daily activity for the last N days"""
+        try:
+            cursor.execute("""
+                SELECT 
+                    DATE(timestamp) as date,
+                    COUNT(*) as searches,
+                    COUNT(DISTINCT account_id) as active_users,
+                    COUNT(DISTINCT s.search_id) as unique_searches
+                FROM searches s
+                WHERE timestamp >= CURRENT_DATE - INTERVAL '%s days'
+                GROUP BY DATE(timestamp)
+                ORDER BY date DESC
+            """, (days,))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting daily activity: {e}")
+            return []

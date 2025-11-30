@@ -61,8 +61,8 @@ def user_detail(user_id):
     if not user:
         return render_template('errors/404.html'), 404
         
-    # Get user activity
-    activity = AdminDB.get_user_activity(user_id)
+    # Get comprehensive user activity
+    activity = AdminDB.get_user_activity_summary(user_id)
     
     return render_template(
         'VeriFact_interface/admin/users/detail.html',
