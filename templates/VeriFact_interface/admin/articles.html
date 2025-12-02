@@ -1,0 +1,414 @@
+{% extends "VeriFact_interface/admin/base.html" %}
+
+{% block title %}Articles Management - Admin Panel{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1 class="card-title">Articles Management</h1>
+                <p class="card-subtitle">Manage aggregated articles from external news sources</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button onclick="refreshArticles()" class="btn btn-secondary">
+                    <i class="fas fa-sync"></i>
+                    Refresh All
+                </button>
+                <button onclick="exportArticles()" class="btn btn-primary">
+                    <i class="fas fa-download"></i>
+                    Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue">
+            <i class="fas fa-newspaper"></i>
+        </div>
+        <div class="stat-value">{{ stats.total_articles or 0 }}</div>
+        <div class="stat-label">Total Articles</div>
+        <div class="stat-change">From all sources</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon green">
+            <i class="fas fa-globe"></i>
+        </div>
+        <div class="stat-value">{{ stats.unique_sources or 0 }}</div>
+        <div class="stat-label">News Sources</div>
+        <div class="stat-change">Active sources</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon purple">
+            <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-value">{{ stats.recent_articles or 0 }}</div>
+        <div class="stat-label">Recent Articles</div>
+        <div class="stat-change">Last 7 days</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon yellow">
+            <i class="fas fa-shield-alt"></i>
+        </div>
+        <div class="stat-value">{{ "%.1f"|format(stats.avg_credibility or 0) }}</div>
+        <div class="stat-label">Avg Credibility</div>
+        <div class="stat-change positive">Overall score</div>
+    </div>
+</div>
+
+<!-- Filters and Search -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Filter Articles</h3>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+        <div class="form-group" style="flex: 1; min-width: 250px;">
+            <label class="form-label">Search Articles</label>
+            <div style="position: relative;">
+                <input type="text" 
+                       id="search" 
+                       name="search" 
+                       value="{{ search or '' }}" 
+                       class="form-input" 
+                       placeholder="Search article titles..."
+                       style="padding-left: 2.5rem;">
+                <i class="fas fa-search" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--muted);"></i>
+            </div>
+        </div>
+        
+        <div class="form-group" style="min-width: 200px;">
+            <label class="form-label">Source Filter</label>
+            <select id="source" name="source" class="form-input">
+                <option value="">All Sources</option>
+                {% for source in sources %}
+                <option value="{{ source }}" {% if source_filter == source %}selected{% endif %}>{{ source }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button onclick="applyFilters()" class="btn btn-primary">
+            <i class="fas fa-filter"></i>
+            Apply
+        </button>
+        
+        <button onclick="resetFilters()" class="btn btn-secondary">
+            <i class="fas fa-redo"></i>
+            Reset
+        </button>
+    </div>
+</div>
+
+<!-- Articles Table -->
+<div class="table-container">
+    <div style="padding: 1.5rem; border-bottom: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="font-weight: 600; color: var(--text);">Aggregated Articles</h3>
+            <span style="color: var(--muted); font-size: 0.875rem;">Showing {{ articles|length }} of {{ total or 0 }} articles</span>
+        </div>
+    </div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Article</th>
+                <th>Source</th>
+                <th>Publication Date</th>
+                <th>Credibility</th>
+                <th style="text-align: center;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for article in articles %}
+            <tr>
+                <td>
+                    <div style="max-width: 400px;">
+                        <div style="font-weight: 500; color: var(--text); margin-bottom: 0.25rem;">
+                            <a href="{{ article.article_url }}" target="_blank" style="color: var(--text); text-decoration: none;">
+                                {{ article.title }}
+                            </a>
+                        </div>
+                        <div style="font-size: 0.75rem; color: var(--muted);">
+                            ID: {{ article.article_id }}
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        {% if article.source != 'Unknown' %}
+                            <div style="width: 24px; height: 24px; border-radius: 4px; background: var(--input-bg); display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-globe" style="font-size: 0.75rem; color: var(--muted);"></i>
+                            </div>
+                        {% endif %}
+                        <span style="font-size: 0.875rem; color: var(--text);">
+                            {{ article.source }}
+                        </span>
+                    </div>
+                </td>
+                <td>
+                    <div style="color: var(--text);">
+                        {% if article.publication_date %}
+                            {{ article.publication_date.strftime('%Y-%m-%d') }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--muted);">
+                        {% if article.publication_date %}
+                            {{ article.publication_date.strftime('%H:%M') }}
+                        {% endif %}
+                    </div>
+                </td>
+                <td>
+                    {% set credibility_score = (article.credibility_score or 0) %}
+                    {% if credibility_score >= 7 %}
+                        <span class="badge badge-success">
+                            <i class="fas fa-shield-alt"></i>
+                            High ({{ "%.1f"|format(credibility_score) }})
+                        </span>
+                    {% elif credibility_score >= 5 %}
+                        <span class="badge badge-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Medium ({{ "%.1f"|format(credibility_score) }})
+                        </span>
+                    {% else %}
+                        <span class="badge badge-danger">
+                            <i class="fas fa-times-circle"></i>
+                            Low ({{ "%.1f"|format(credibility_score) }})
+                        </span>
+                    {% endif %}
+                </td>
+                <td style="text-align: center;">
+                    <div style="display: flex; justify-content: center; gap: 0.5rem;">
+                        <button onclick="viewArticle('{{ article.article_url|e }}')" class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" title="View Article">
+                            <i class="fas fa-external-link-alt"></i>
+                        </button>
+                        <button onclick="refreshArticle({{ article.article_id }})" class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem; color: #f59e0b;" title="Refresh Article">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                        <button onclick="deleteArticle({{ article.article_id }})" class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem; color: #ef4444;" title="Delete Article">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 3rem;">
+                    <div style="color: var(--muted);">
+                        <i class="fas fa-newspaper" style="font-size: 3rem; margin-bottom: 1rem; display: block;"></i>
+                        <p style="font-size: 1.125rem; font-weight: 500; margin-bottom: 0.5rem;">No articles found</p>
+                        <p style="font-size: 0.875rem;">Try adjusting your search or filters</p>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div style="padding: 1.5rem; border-top: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div style="color: var(--muted); font-size: 0.875rem;">
+                Showing page {{ page }} of {{ total_pages }}
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                {% if page > 1 %}
+                    <a href="?page={{ page - 1 }}&search={{ search or '' }}&source={{ source_filter or '' }}" 
+                       class="btn btn-secondary" style="padding: 0.5rem 0.75rem;">
+                        <i class="fas fa-chevron-left"></i>
+                    </a>
+                {% endif %}
+                
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == page %}
+                        <span style="padding: 0.5rem 0.75rem; background: var(--brand-veri); color: white; border-radius: 6px; font-weight: 500;">{{ p }}</span>
+                    {% elif p <= 3 or p >= total_pages - 2 or (p >= page - 2 and p <= page + 2) %}
+                        <a href="?page={{ p }}&search={{ search or '' }}&source={{ source_filter or '' }}" 
+                           class="btn btn-secondary" style="padding: 0.5rem 0.75rem;">
+                            {{ p }}
+                        </a>
+                    {% elif p == 4 or p == total_pages - 3 %}
+                        <span style="padding: 0.5rem 0.75rem; color: var(--muted);">...</span>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if page < total_pages %}
+                    <a href="?page={{ page + 1 }}&search={{ search or '' }}&source={{ source_filter or '' }}" 
+                       class="btn btn-secondary" style="padding: 0.5rem 0.75rem;">
+                        <i class="fas fa-chevron-right"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Source Management Section -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">News Sources</h3>
+        <p class="card-subtitle">Manage and monitor article sources</p>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+        {% for source in sources %}
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--input-bg); border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--brand-veri), var(--brand-fact)); display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-globe" style="color: white; font-size: 0.75rem;"></i>
+                </div>
+                <div>
+                    <div style="font-weight: 500; color: var(--text);">{{ source }}</div>
+                    <div style="font-size: 0.75rem; color: var(--muted);">
+                        {{ articles|selectattr('source', 'equalto', source)|list|length }} articles
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button onclick="refreshSource('{{ source }}')" class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;" title="Refresh Source">
+                    <i class="fas fa-sync"></i>
+                </button>
+            </div>
+        </div>
+        {% else %}
+        <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--muted);">
+            <i class="fas fa-globe" style="font-size: 2rem; margin-bottom: 0.5rem; display: block;"></i>
+            <p>No sources available</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyFilters() {
+    const search = document.getElementById('search').value;
+    const source = document.getElementById('source').value;
+    window.location.href = `?search=${encodeURIComponent(search)}&source=${encodeURIComponent(source)}`;
+}
+
+function resetFilters() {
+    window.location.href = '?';
+}
+
+function viewArticle(url) {
+    window.open(url, '_blank');
+}
+
+function refreshArticle(articleId) {
+    if (confirm('Are you sure you want to refresh this article?')) {
+        fetch(`/api/articles/${articleId}/refresh`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while refreshing the article');
+        });
+    }
+}
+
+function deleteArticle(articleId) {
+    if (confirm('Are you sure you want to delete this article? This action cannot be undone.')) {
+        fetch(`/api/articles/${articleId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while deleting the article');
+        });
+    }
+}
+
+function refreshArticles() {
+    if (confirm('Are you sure you want to refresh all articles? This may take a while.')) {
+        fetch('/api/articles/refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while refreshing articles');
+        });
+    }
+}
+
+function refreshSource(source) {
+    if (confirm(`Are you sure you want to refresh articles from "${source}"?`)) {
+        fetch(`/api/sources/${encodeURIComponent(source)}/refresh`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while refreshing the source');
+        });
+    }
+}
+
+function exportArticles() {
+    const search = document.getElementById('search').value;
+    const source = document.getElementById('source').value;
+    window.location.href = `/api/articles/export?search=${encodeURIComponent(search)}&source=${encodeURIComponent(source)}`;
+}
+
+// Add real-time search
+document.getElementById('search').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        applyFilters();
+    }
+});
+</script>
+{% endblock %}

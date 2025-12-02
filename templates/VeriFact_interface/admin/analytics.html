@@ -1,0 +1,458 @@
+{% extends "VeriFact_interface/admin/base.html" %}
+
+{% block title %}Analytics - Admin Panel{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <h1 class="card-title">Analytics Dashboard</h1>
+                <p class="card-subtitle">Deep insights into VeriFact performance</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button onclick="exportAnalytics()" class="btn btn-secondary">
+                    <i class="fas fa-download"></i>
+                    Export Report
+                </button>
+                <button onclick="refreshAnalytics()" class="btn btn-primary">
+                    <i class="fas fa-sync"></i>
+                    Refresh Data
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Charts Section -->
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+    <!-- Daily Activity Chart (Larger) -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Daily Activity Trends</h3>
+            <p class="card-subtitle">Searches and user activity over the last 30 days</p>
+        </div>
+        <div style="height: 400px; display: flex; align-items: center; justify-content: center;">
+            <canvas id="dailyActivityChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Quick Insights -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Quick Insights</h3>
+            <p class="card-subtitle">Key performance indicators</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 1rem; padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: 12px; height: 12px; border-radius: 50%; background: #22c55e;"></div>
+                <div style="flex: 1;">
+                    <div style="font-size: 0.875rem; color: var(--text); font-weight: 600;">Search Activity</div>
+                    <div style="font-size: 0.75rem; color: var(--muted);">
+                        {% if analytics and analytics.search_stats and analytics.search_stats.searches_today > 0 %}
+                            {{ analytics.search_stats.searches_today }} searches today
+                        {% else %}
+                            No searches today
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: 12px; height: 12px; border-radius: 50%; background: #f59e0b;"></div>
+                <div style="flex: 1;">
+                    <div style="font-size: 0.875rem; color: var(--text); font-weight: 600;">User Growth</div>
+                    <div style="font-size: 0.75rem; color: var(--muted);">
+                        {% if analytics and analytics.user_stats and analytics.user_stats.new_week > 0 %}
+                            {{ analytics.user_stats.new_week }} new users this week
+                        {% else %}
+                            No new users this week
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: 12px; height: 12px; border-radius: 50%; background: #3b82f6;"></div>
+                <div style="flex: 1;">
+                    <div style="font-size: 0.875rem; color: var(--text); font-weight: 600;">Content Freshness</div>
+                    <div style="font-size: 0.75rem; color: var(--muted);">
+                        {% if analytics and analytics.content_stats and analytics.content_stats.recent_articles > 0 %}
+                            {{ analytics.content_stats.recent_articles }} recent articles
+                        {% else %}
+                            No recent articles
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444;"></div>
+                <div style="flex: 1;">
+                    <div style="font-size: 0.875rem; color: var(--text); font-weight: 600;">Engagement</div>
+                    <div style="font-size: 0.75rem; color: var(--muted);">
+                        {% if analytics and analytics.engagement_stats and analytics.engagement_stats.reviews_today > 0 %}
+                            {{ analytics.engagement_stats.reviews_today }} reviews today
+                        {% else %}
+                            No reviews today
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Secondary Analytics Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+    <!-- Recent Searches -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h3 class="card-title">Recent Searches</h3>
+                    <p class="card-subtitle">Latest user activity</p>
+                </div>
+                <span class="badge badge-info">{{ recent_searches|length if recent_searches else 0 }} total</span>
+            </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 400px; overflow-y: auto;">
+            {% for search in recent_searches[:10] %}
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--input-bg); border-radius: 8px; border-left: 3px solid var(--brand-veri);">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 0.875rem; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ search.query_text }}">{{ search.query_text }}</div>
+                    <div style="font-size: 0.75rem; color: var(--muted); display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-user" style="font-size: 0.625rem;"></i>
+                        {{ search.username or 'Guest' }}
+                    </div>
+                </div>
+                <div style="text-align: right; margin-left: 1rem;">
+                    <div style="font-size: 0.75rem; color: var(--muted);">
+                        {% if search.timestamp %}
+                            {{ search.timestamp.strftime('%H:%M') }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div style="text-align: center; padding: 2rem; color: var(--muted);">
+                <i class="fas fa-search" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                <p style="font-size: 0.875rem;">No recent searches</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Trending Searches -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h3 class="card-title">Top Trending Searches</h3>
+                    <p class="card-subtitle">Most popular search terms</p>
+                </div>
+                <span class="badge badge-success" id="trendingCount">0 trends</span>
+            </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 400px; overflow-y: auto;" class="trending-list">
+            <!-- Trending categories will be loaded here via JavaScript -->
+            <div style="text-align: center; padding: 2rem; color: var(--muted);">
+                <i class="fas fa-fire" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                <p style="font-size: 0.875rem;">Loading trending categories...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed Analytics Table -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h3 class="card-title">Daily Activity Details</h3>
+                <p class="card-subtitle">Search activity breakdown by day</p>
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+                <button onclick="exportTableData()" class="btn btn-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.75rem;">
+                    <i class="fas fa-csv"></i>
+                    Export CSV
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Searches</th>
+                    <th>Active Users</th>
+                    <th>Unique Searches</th>
+                    <th>Avg Searches/User</th>
+                    <th>Trend</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for activity in daily_activity %}
+                <tr>
+                    <td>
+                        {% if activity.date %}
+                            {{ activity.date.strftime('%b %d, %Y') }}
+                        {% else %}
+                            N/A
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span style="font-weight: 600;">{{ activity.searches or 0 }}</span>
+                    </td>
+                    <td>{{ activity.active_users or 0 }}</td>
+                    <td>{{ activity.unique_searches or 0 }}</td>
+                    <td>
+                        {% if activity.active_users and activity.active_users > 0 %}
+                            {{ "%.1f"|format((activity.searches or 0) / activity.active_users) }}
+                        {% else %}
+                            0.0
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if activity.searches and activity.searches > 0 %}
+                            {% if activity.searches > 10 %}
+                                <span style="color: #22c55e;"><i class="fas fa-arrow-up"></i> High</span>
+                            {% elif activity.searches > 5 %}
+                                <span style="color: #f59e0b;"><i class="fas fa-minus"></i> Medium</span>
+                            {% else %}
+                                <span style="color: var(--muted);"><i class="fas fa-arrow-down"></i> Low</span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: var(--muted);">No activity</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 3rem;">
+                        <div style="color: var(--muted);">
+                            <i class="fas fa-chart-line" style="font-size: 3rem; margin-bottom: 1rem; display: block;"></i>
+                            <p style="font-size: 1.125rem; font-weight: 500; margin-bottom: 0.5rem;">No daily activity data</p>
+                            <p style="font-size: 0.875rem;">Activity will appear here as users perform searches</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- Data storage for JavaScript -->
+<script type="application/json" id="analyticsData">
+{
+    "daily_activity": {{ daily_activity|tojson|default('[]') }},
+    "new_users_today": {{ (analytics.user_stats.new_today if analytics and analytics.user_stats else 0)|tojson|default('0') }}
+}
+</script>
+<script>
+// Initialize charts when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Parse data from JSON script tag
+    var analyticsData = JSON.parse(document.getElementById('analyticsData').textContent);
+    var dailyActivityData = analyticsData.daily_activity || [];
+    var newUsersToday = analyticsData.new_users_today || 0;
+    
+    // Daily Activity Chart
+    var dailyCtx = document.getElementById('dailyActivityChart');
+    if (dailyCtx && dailyActivityData && dailyActivityData.length > 0) {
+        new Chart(dailyCtx, {
+            type: 'line',
+            data: {
+                labels: dailyActivityData.map(function(d) { 
+                    return new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); 
+                }).reverse(),
+                datasets: [{
+                    label: 'Searches',
+                    data: dailyActivityData.map(function(d) { return d.searches; }).reverse(),
+                    borderColor: 'rgb(34, 197, 94)',
+                    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }, {
+                    label: 'Active Users',
+                    data: dailyActivityData.map(function(d) { return d.active_users; }).reverse(),
+                    borderColor: 'rgb(249, 194, 41)',
+                    backgroundColor: 'rgba(249, 194, 41, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: '#e9eef3' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#e9eef3',
+                        bodyColor: '#e9eef3',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#e9eef3' }
+                    },
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: '#e9eef3' }
+                    }
+                }
+            }
+        });
+    } else if (dailyCtx) {
+        // Show empty state for chart
+        dailyCtx.getContext('2d').font = '14px Inter';
+        dailyCtx.getContext('2d').fillStyle = '#999';
+        dailyCtx.getContext('2d').textAlign = 'center';
+        dailyCtx.getContext('2d').fillText('No data available', dailyCtx.width / 2, dailyCtx.height / 2);
+    }
+});
+
+function refreshAnalytics() {
+    location.reload();
+}
+
+function exportAnalytics() {
+    // Implement export functionality
+    console.log('Exporting analytics...');
+    alert('Analytics export feature coming soon!');
+}
+
+function exportTableData() {
+    // Export table data as CSV
+    var table = document.querySelector('.table');
+    var rows = table.querySelectorAll('tr');
+    var csv = [];
+    
+    // Get headers
+    var headers = [];
+    table.querySelectorAll('th').forEach(function(th) {
+        headers.push(th.textContent.trim());
+    });
+    csv.push(headers.join(','));
+    
+    // Get data rows
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+        var rowData = [];
+        row.querySelectorAll('td').forEach(function(td) {
+            rowData.push(td.textContent.trim());
+        });
+        csv.push(rowData.join(','));
+    });
+    
+    // Create download
+    var csvContent = csv.join('\n');
+    var blob = new Blob([csvContent], { type: 'text/csv' });
+    var url = window.URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.setAttribute('hidden', '');
+    a.setAttribute('href', url);
+    a.setAttribute('download', 'analytics_' + new Date().toISOString().split('T')[0] + '.csv');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// Load trending categories from home.html API
+function loadTrendingCategories() {
+    fetch('/api/trending')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success' && data.trending) {
+                displayTrendingCategories(data.trending);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading trending categories:', error);
+        });
+}
+
+function displayTrendingCategories(categories) {
+    const trendingContainer = document.querySelector('.trending-list');
+    const trendingCount = document.getElementById('trendingCount');
+    
+    if (!trendingContainer) return;
+    
+    // Update the counter badge
+    if (trendingCount) {
+        trendingCount.textContent = categories.length + ' trends';
+    }
+    
+    trendingContainer.innerHTML = '';
+    
+    if (categories.length === 0) {
+        trendingContainer.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: var(--muted);">
+                <i class="fas fa-fire" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+                <p style="font-size: 0.875rem;">No trending categories available</p>
+            </div>
+        `;
+        return;
+    }
+    
+    categories.forEach((category, index) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--input-bg); border-radius: 8px;';
+        
+        const maxFires = Math.min(category.count, 5);
+        let fireIcons = '';
+        for (let i = 0; i < maxFires; i++) {
+            if (i < 2) {
+                fireIcons += '<i class="fas fa-fire" style="font-size: 0.625rem; color: var(--brand-veri);"></i>';
+            } else if (i < 4) {
+                fireIcons += '<i class="fas fa-fire" style="font-size: 0.625rem; color: var(--brand-fact);"></i>';
+            } else {
+                fireIcons += '<i class="fas fa-fire" style="font-size: 0.625rem; color: var(--muted);"></i>';
+            }
+        }
+        
+        item.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: var(--brand-fact); color: var(--text); border-radius: 50%; font-size: 0.75rem; font-weight: 600;">
+                ${index + 1}
+            </div>
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 0.875rem; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${category.category}">${category.category}</div>
+                <div style="font-size: 0.75rem; color: var(--muted);">
+                    ${category.count} search${category.count != 1 ? 'es' : ''}
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.25rem;">
+                ${fireIcons}
+            </div>
+        `;
+        
+        trendingContainer.appendChild(item);
+    });
+}
+
+// Load trending categories when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadTrendingCategories();
+});
+</script>
+{% endblock %}

@@ -333,6 +333,235 @@ canvas#aurora-bg {
   color: var(--text);
 }
 
+/* Large Modal Styles */
+.modal-large {
+  max-width: 800px;
+  width: 90vw;
+  max-height: 85vh;
+}
+
+.modal-scrollable {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 1rem;
+}
+
+.modal-scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-scrollable::-webkit-scrollbar-track {
+  background: var(--panel);
+  border-radius: 3px;
+}
+
+.modal-scrollable::-webkit-scrollbar-thumb {
+  background: var(--btn-outline);
+  border-radius: 3px;
+}
+
+.modal-scrollable::-webkit-scrollbar-thumb:hover {
+  background: var(--btn-outline-hover);
+}
+
+/* Terms and Privacy Content Styles */
+.terms-content,
+.privacy-content {
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.terms-section,
+.privacy-section {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.terms-section:last-child,
+.privacy-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.terms-section h4,
+.privacy-section h4 {
+  color: var(--brand-fact);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.terms-section h4 i,
+.privacy-section h4 i {
+  color: var(--brand-veri);
+  font-size: 1rem;
+}
+
+.terms-section p,
+.privacy-section p {
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.terms-section ul,
+.privacy-section ul {
+  margin: 1rem 0;
+  padding-left: 1.5rem;
+  color: var(--text);
+}
+
+.terms-section li,
+.privacy-section li {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+.data-types h5 {
+  color: var(--brand-fact);
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1.5rem 0 0.75rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.terms-acceptance,
+.privacy-acceptance {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: var(--panel);
+  border: 1px solid var(--brand-fact);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.terms-acceptance p,
+.privacy-acceptance p {
+  margin: 0;
+  font-weight: 600;
+  color: var(--brand-fact);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .modal-large {
+    width: 95vw;
+    max-height: 90vh;
+  }
+  
+  .modal-scrollable {
+    max-height: 75vh;
+  }
+  
+  .terms-section h4,
+  .privacy-section h4 {
+    font-size: 1rem;
+  }
+  
+  .terms-section ul,
+  .privacy-section ul {
+    padding-left: 1rem;
+  }
+}
+
+/* Terms Checkbox Styles */
+.terms-checkbox {
+  justify-content: flex-start;
+  margin: 1rem 0;
+  padding: 0;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  margin: 0;
+}
+
+.checkbox-label input[type="checkbox"] {
+  display: none;
+}
+
+.checkmark {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--btn-outline);
+  border-radius: 4px;
+  background: transparent;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: all 0.2s ease;
+}
+
+.checkbox-label input[type="checkbox"]:checked + .checkmark {
+  background: var(--brand-fact);
+  border-color: var(--brand-fact);
+}
+
+.checkbox-label input[type="checkbox"]:checked + .checkmark::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.checkbox-text {
+  flex: 1;
+}
+
+.checkbox-text a {
+  color: var(--brand-fact);
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.checkbox-text a:hover {
+  color: var(--brand-veri);
+  text-decoration: underline;
+}
+
+/* Checkbox hover effects */
+.checkbox-label:hover .checkmark {
+  border-color: var(--brand-fact);
+}
+
+.checkbox-label:has(input:checked) .checkmark {
+  background: var(--brand-fact);
+  border-color: var(--brand-fact);
+}
+
+/* Mobile checkbox adjustments */
+@media (max-width: 480px) {
+  .checkbox-label {
+    font-size: 13px;
+  }
+  
+  .checkmark {
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+  }
+  
+  .checkbox-label input[type="checkbox"]:checked + .checkmark::after {
+    font-size: 10px;
+  }
+}
+
 
 
         

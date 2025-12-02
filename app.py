@@ -337,9 +337,9 @@ def build_followup_response(message, context, metrics):
 
 def get_db_connection():
     return psycopg2.connect(
-        host="localhost",
+        host="127.0.0.1",
         user="postgres",
-        password="radgelwashere4453",  #Change this to your own password Corl4453
+        password="lenroy3221",  #Change this to your own password Corl4453
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -809,6 +809,11 @@ def api_login():
 def home():
     # Render the home interface
     return render_template('VeriFact_interface/home.html')
+
+@app.route('/guide')
+def guide():
+    # Render the guide page
+    return render_template('VeriFact_interface/guide.html')
 
 @app.route('/api/user', methods=['GET'])
 def get_current_user():
@@ -1430,6 +1435,51 @@ def get_trending():
         import traceback
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': 'Failed to retrieve trending topics'}), 500
+
+@app.route('/api/trending/searches', methods=['GET'])
+def get_trending_searches_public():
+    """Public API endpoint for trending searches (no login required)"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        
+        with get_db_connection() as db:
+            with db.cursor() as cursor:
+                # Use the same query as admin but accessible publicly
+                query = """
+                SELECT 
+                    query as query_text,
+                    COUNT(*) as search_count,
+                    1 as unique_users
+                FROM "search_results"
+                WHERE query IS NOT NULL 
+                    AND query != ''
+                    AND created_at >= CURRENT_DATE - INTERVAL '7 days'
+                GROUP BY query
+                ORDER BY search_count DESC
+                LIMIT %s
+                """
+                cursor.execute(query, (limit,))
+                trending = cursor.fetchall()
+                
+                trending_list = []
+                for item in trending:
+                    trending_list.append({
+                        'query_text': item['query_text'],
+                        'search_count': item['search_count'], 
+                        'unique_users': item['unique_users'],
+                        'last_searched': None  # Not available in this query
+                    })
+                
+                return jsonify({
+                    'success': True,
+                    'trending_searches': trending_list
+                })
+                
+    except Exception as e:
+        print("❌ Get trending searches error:", e)
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': 'Failed to retrieve trending searches'}), 500
 
 @app.route('/api/chat/save_history', methods=['POST'])
 def save_chat_history():

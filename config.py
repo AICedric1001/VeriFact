@@ -2,7 +2,7 @@ import psycopg2
 import psycopg2.extras
 
 conn = psycopg2.connect(
-    host="localhost",
+    host="127.0.0.1",
     user="postgres",
     password="lenroy3221",  # Change this to your own password
     database="websearch_demo",
