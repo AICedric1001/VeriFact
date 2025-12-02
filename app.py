@@ -337,9 +337,9 @@ def build_followup_response(message, context, metrics):
 
 def get_db_connection():
     return psycopg2.connect(
-        host="127.0.0.1",
+        host="localhost",
         user="postgres",
-        password="lenroy3221",  #Change this to your own password Corl4453
+        password="radgelwashere4453",  #Change this to your own password Corl4453
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -597,22 +597,21 @@ def api_scrape():
                 import json
                 results_json = json.dumps(results)
                 
-                # Check if search_results already exists for this query (reuse existing to avoid duplicates)
-                check_result_sql = "SELECT result_id FROM search_results WHERE query = %s ORDER BY result_id DESC LIMIT 1"
-                cursor.execute(check_result_sql, (query,))
-                existing_result = cursor.fetchone()
+                # If search_id is provided, use it (it was created by /api/chat/send for this new chat)
+                # Don't look for existing searches - this ensures new chats get fresh scrapes
+                search_id_to_use = None
+                if search_id and 'user_db_id' in session:
+                    # Verify the search_id belongs to this user
+                    cursor.execute(
+                        "SELECT search_id FROM searches WHERE search_id = %s AND account_id = %s",
+                        (search_id, session['user_db_id'])
+                    )
+                    result = cursor.fetchone()
+                    if result:
+                        search_id_to_use = result['search_id']
                 
-                if existing_result:
-                    result_id = existing_result['result_id']
-                else:
-                    # Insert into search_results table only if it doesn't exist
-                    insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
-                    cursor.execute(insert_result_sql, (query, results_json))
-                    result_id = cursor.fetchone()['result_id']
-
-                # Check if searches already exists for this user and query (within last 5 minutes)
-                search_id = None
-                if 'user_db_id' in session:
+                # Only look for existing searches if no search_id was provided
+                if not search_id_to_use and 'user_db_id' in session:
                     check_search_sql = """
                         SELECT search_id FROM searches 
                         WHERE account_id = %s 
@@ -625,12 +624,35 @@ def api_scrape():
                     existing_search = cursor.fetchone()
                     
                     if existing_search:
-                        search_id = existing_search['search_id']
+                        search_id_to_use = existing_search['search_id']
                     else:
                         # Insert into searches table only if it doesn't exist
                         insert_search_sql = "INSERT INTO searches (account_id, query_text) VALUES (%s, %s) RETURNING search_id"
                         cursor.execute(insert_search_sql, (session['user_db_id'], query))
-                        search_id = cursor.fetchone()['search_id']
+                        search_id_to_use = cursor.fetchone()['search_id']
+                
+                # For search_results: if search_id was provided (new chat), always create fresh results
+                # Otherwise, reuse existing results if available
+                if search_id and search_id_to_use:
+                    # New chat - create fresh search_results
+                    insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
+                    cursor.execute(insert_result_sql, (query, results_json))
+                    result_id = cursor.fetchone()['result_id']
+                else:
+                    # Check if search_results already exists for this query (reuse existing to avoid duplicates)
+                    check_result_sql = "SELECT result_id FROM search_results WHERE query = %s ORDER BY result_id DESC LIMIT 1"
+                    cursor.execute(check_result_sql, (query,))
+                    existing_result = cursor.fetchone()
+                    
+                    if existing_result:
+                        result_id = existing_result['result_id']
+                    else:
+                        # Insert into search_results table only if it doesn't exist
+                        insert_result_sql = "INSERT INTO search_results (query, results) VALUES (%s, %s) RETURNING result_id"
+                        cursor.execute(insert_result_sql, (query, results_json))
+                        result_id = cursor.fetchone()['result_id']
+                
+                search_id = search_id_to_use
 
                 # Insert each article as its own row linked to this result_id
                 for item in results:
@@ -951,7 +973,7 @@ def send_chat_message():
         message = data['message'].strip()
         if not message:
             return jsonify({'status': 'error', 'message': 'Message cannot be empty'}), 400
-        
+
         provided_search_id = data.get('search_id')
         
         with get_db_connection() as db:
@@ -959,7 +981,8 @@ def send_chat_message():
                 search_id_to_use = None
                 is_first_message = False
                 
-                # Try to find existing search
+                # Try to find existing search ONLY if search_id was explicitly provided
+                # If search_id is null/undefined, this is a new chat - don't reuse old searches
                 if provided_search_id:
                     cursor.execute(
                         "SELECT search_id FROM searches WHERE search_id = %s AND account_id = %s",
@@ -969,23 +992,8 @@ def send_chat_message():
                     if result:
                         search_id_to_use = result['search_id']
                 
-                # If no valid search_id, look for recent search
-                if not search_id_to_use:
-                    cursor.execute(
-                        """
-                        SELECT search_id FROM searches 
-                        WHERE account_id = %s 
-                        AND timestamp > NOW() - INTERVAL '1 hour'
-                        ORDER BY timestamp DESC 
-                        LIMIT 1
-                        """,
-                        (session['user_db_id'],)
-                    )
-                    result = cursor.fetchone()
-                    if result:
-                        search_id_to_use = result['search_id']
-                
-                # Create new search if needed
+                # Create new search if no valid search_id was provided
+                # IMPORTANT: Don't look for recent searches when starting a new chat
                 if not search_id_to_use:
                     is_first_message = True
                     cursor.execute(
