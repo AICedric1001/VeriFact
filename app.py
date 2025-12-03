@@ -27,6 +27,17 @@ app = Flask(__name__)
 
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback-insecure-dev-key")
 
+ILLEGAL_CONTENT_KEYWORDS = ['illegal_act_1', 'extreme_topic_2', 'graphic_term_3'] # Populate this with a comprehensive list
+
+def is_content_harmful(content):
+    """Simple keyword check for illegal/extreme content."""
+    if not content:
+        return False
+    lower_content = content.lower()
+    for keyword in ILLEGAL_CONTENT_KEYWORDS:
+        if keyword in lower_content:
+            return True
+    return False
 # Load SpaCy model for category extraction
 try:
     nlp = spacy.load("en_core_web_sm")
@@ -339,7 +350,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="radgelwashere4453",  #Change this to your own password Corl4453
+        password="Corl4453",  #Change this to your own password Corl4453
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -659,6 +670,12 @@ def api_scrape():
                     url = item.get('url')
                     title = item.get('title')
                     content = item.get('content')
+                    
+                    if is_content_harmful(content):
+                        print(f"❌ Filtering article content for URL: {url} - Keyword match.")
+                        # Skip the article, preventing storage and summarization
+                        continue
+                 
                     # Derive source_name from domain
                     source_name = None
                     try:

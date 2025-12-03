@@ -6,6 +6,7 @@ def generate_summary_from_text(post_text, serpapi_key=None):
     print(f"📨 Running summary on: {post_text}")
 
     links = search_serpapi(post_text, serpapi_key)
+    HARMFUL_DOMAIN_BLOCKLIST = ['malicious-site.com', 'illegal-forum.net', 'extreme-content.org']
     # Normalize to a list of URL strings in case search_serpapi returns dicts
     urls = []
     for item in links or []:
@@ -15,6 +16,17 @@ def generate_summary_from_text(post_text, serpapi_key=None):
                 urls.append(url)
         elif isinstance(item, str):
             urls.append(item)
+        
+    safe_urls = []
+    for url in urls:
+        is_blocked = False
+        for blocked_domain in HARMFUL_DOMAIN_BLOCKLIST:
+            if blocked_domain in url:
+                print(f"🚫 Blocked URL due to domain blocklist: {url}")
+                is_blocked = True
+                break
+        if not is_blocked:
+            safe_urls.append(url)
 
     trusted_links = [url for url in urls if any(domain in url for domain in FILTERED_DOMAINS)]
     unverified_links = [url for url in urls if url not in trusted_links]
