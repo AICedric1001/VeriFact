@@ -148,9 +148,27 @@ function sendMessage(force = false) {
               console.error('❌ Error fetching bot response:', err);
               showNotification('Error generating response', 'error');
             });
+          } else if (scrape && scrape.status === 'blocked') {
+            // Harmful/illegal query was detected by backend safety filter
+            console.warn('⚠️ Scrape blocked for safety:', scrape.message);
+
+            // Show a clear chat message explaining why nothing was scraped
+            const warningText = scrape.message || 'This query cannot be processed because it violates safety guidelines.';
+            const botMsg = buildFollowupBotMessage(warningText);
+            chatBox.appendChild(botMsg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            if (typeof showNotification === 'function') {
+              showNotification(warningText, 'error');
+            }
+
+            // Start a fresh conversation so the next message can run a normal scrape
+            if (window.chatManager && typeof window.chatManager.newChat === 'function') {
+              window.chatManager.newChat();
+            }
           } else {
             console.error('❌ Scrape failed:', scrape);
-            showNotification('Failed to scrape sources: ' + (scrape.message || 'Unknown error'), 'error');
+            showNotification('Failed to scrape sources: ' + (scrape && scrape.message ? scrape.message : 'Unknown error'), 'error');
           }
         })
         .catch(err => {

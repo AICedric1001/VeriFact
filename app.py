@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import psycopg2
 import psycopg2.extras
 from scraper import main_system, search_serpapi
+from harmful_content_filter import is_query_safe, is_url_safe, is_content_safe
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -29,18 +30,6 @@ app = Flask(__name__)
 app.register_blueprint(admin_bp)
 
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback-insecure-dev-key")
-
-ILLEGAL_CONTENT_KEYWORDS = ['illegal_act_1', 'extreme_topic_2', 'graphic_term_3'] # Populate this with a comprehensive list
-
-def is_content_harmful(content):
-    """Simple keyword check for illegal/extreme content."""
-    if not content:
-        return False
-    lower_content = content.lower()
-    for keyword in ILLEGAL_CONTENT_KEYWORDS:
-        if keyword in lower_content:
-            return True
-    return False
 # Load SpaCy model for category extraction
 try:
     nlp = spacy.load("en_core_web_sm")
@@ -351,7 +340,7 @@ def build_followup_response(message, context, metrics):
 
 def get_db_connection():
     return psycopg2.connect(
-        host="localhost",
+        host="127.0.0.1",
         user="postgres",
         password="lenroy3221",  #Change this to your own password Corl4453
         database="websearch_demo",
@@ -416,6 +405,13 @@ def search():
         # Handle search functionality
         if 'query' in request.form:
             query = request.form['query']
+            
+            # Safety check: block harmful queries before scraping/summarizing
+            is_safe, reason = is_query_safe(query)
+            if not is_safe:
+                # Do not scrape or summarize; just render page with warning
+                return render_template('index.html', results=[], error_message=reason)
+
             serpapi_key = request.form.get('serpapi_key') or os.getenv("SERPAPI_API_KEY") or "b78924b4496d3e2abba8b33f9e89fa5eb443f8e5ba0db605c98b5b6bae37e50c"
             # Always use trusted sources filter
             use_trusted_sources = True
@@ -471,6 +467,17 @@ def search():
                             url = item.get('url')
                             title = item.get('title')
                             content = item.get('content')
+                            
+                            # Safety checks for scraped URL and content
+                            safe_url, url_reason = is_url_safe(url)
+                            if not safe_url:
+                                print(f"❌ Skipping unsafe URL in /search: {url} - {url_reason}")
+                                continue
+
+                            safe_content, content_reason = is_content_safe(content or '')
+                            if not safe_content:
+                                print(f"❌ Skipping harmful content in /search for URL: {url} - {content_reason}")
+                                continue
                             # Derive source_name from domain
                             source_name = None
                             try:
@@ -558,6 +565,13 @@ def api_scrape():
         query = (data.get('query') or '').strip()
         search_id = data.get('search_id')
         
+        # Safety check: block harmful queries before any scraping
+        is_safe, reason = is_query_safe(query)
+        if not is_safe:
+            # Do not call main_system, do not create search_results/usersummaries
+            # Return 200 with a blocked status so the frontend can handle gracefully
+            return jsonify({'status': 'blocked', 'message': reason}), 200
+
         if not query:
             # If no query provided, try to get it from search_id or most recent search
             if 'user_db_id' not in session:
@@ -674,9 +688,15 @@ def api_scrape():
                     title = item.get('title')
                     content = item.get('content')
                     
-                    if is_content_harmful(content):
-                        print(f"❌ Filtering article content for URL: {url} - Keyword match.")
-                        # Skip the article, preventing storage and summarization
+                    # Safety checks for scraped URL and content
+                    safe_url, url_reason = is_url_safe(url)
+                    if not safe_url:
+                        print(f"❌ Skipping unsafe URL in /api/scrape: {url} - {url_reason}")
+                        continue
+
+                    safe_content, content_reason = is_content_safe(content or '')
+                    if not safe_content:
+                        print(f"❌ Skipping harmful content in /api/scrape for URL: {url} - {content_reason}")
                         continue
                  
                     # Derive source_name from domain
