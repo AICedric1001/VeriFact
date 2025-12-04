@@ -244,6 +244,33 @@ window.addEventListener('resize', () => {
       });
     }
 
+    // Function to show custom notifications
+    function showNotification(message, type = 'info') {
+      const notificationContainer = document.getElementById('notificationContainer');
+      if (!notificationContainer) {
+        console.error('Notification container not found');
+        return;
+      }
+
+      const notification = document.createElement('div');
+      notification.classList.add('notification', `notification-${type}`);
+      notification.innerHTML = `
+        <div class="notification-content">
+          ${message}
+        </div>
+      `;
+
+      notificationContainer.appendChild(notification);
+
+      // Automatically hide after 3 seconds
+      setTimeout(() => {
+        notification.classList.add('hide');
+        notification.addEventListener('transitionend', () => {
+          notification.remove();
+        });
+      }, 3000);
+    }
+
     // Send feedback functionality
     if (sendFeedbackBtn) {
       sendFeedbackBtn.addEventListener('click', function(e) {
@@ -251,12 +278,12 @@ window.addEventListener('resize', () => {
         e.stopPropagation();
         const feedback = feedbackTextarea.value.trim();
         if (feedback === '') {
-          alert('Please enter your feedback before sending.');
+          showNotification('Please enter your feedback before sending.', 'warning');
           feedbackTextarea.focus();
           return;
         }
         if (feedback.length < 10) {
-          alert('Please provide more detailed feedback (at least 10 characters).');
+          showNotification('Please provide more detailed feedback (at least 10 characters).', 'warning');
           feedbackTextarea.focus();
           return;
         }

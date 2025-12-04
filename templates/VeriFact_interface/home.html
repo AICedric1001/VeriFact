@@ -196,7 +196,7 @@
                     <button class="icon-btn" type="button" aria-label="Close" data-close><i class="fa fa-times"></i></button>
                 </div>
                 <div class="modal-body">
-                    <div class="modal-meta" style="margin-bottom:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                    <div class="modal-meta" style="margin-bottom:12px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content: space-between;">
                         <div class="archive-actions" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                             <button id="archiveClearAll" class="btn-secondary" type="button">Clear All</button>
                             <label class="archive-select-all" for="archiveSelectAll" style="display:flex; align-items:center; gap:4px;">
@@ -205,12 +205,11 @@
                             </label>
                             <button id="archiveExportSelected" class="btn-primary" type="button" disabled>Export Selected (.doc)</button>
                             <button id="archiveExportAll" class="btn-primary" type="button">Export All (.doc)</button>
-                        </div>
-                        <div style="flex:1"></div>
-                        <span class="sr-only">Archived responses list</span>
-                        <div class="search-box">
-                            <input type="text" id="archiveSearchInput" placeholder="Search..." aria-label="Search archived responses" />
-                            <button id="archiveSearchBtn" type="button" aria-label="Search"><i class="fas fa-search"></i></button>
+                            <span class="sr-only">Archived responses list</span>
+                            <div class="search-box">
+                                <input type="text" id="archiveSearchInput" placeholder="Search..." aria-label="Search archived responses" />
+                                <button id="archiveSearchBtn" type="button" aria-label="Search"><i class="fas fa-search"></i></button>
+                            </div>
                         </div>
                     </div>
                     <div id="archiveAccordion" class="accordion" style="padding:6px 0;">
@@ -219,6 +218,9 @@
                 </div>
             </div>
         </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
 
         <script src="js/newchat.js"></script>
         <script src="js/chatfunction.js"></script>

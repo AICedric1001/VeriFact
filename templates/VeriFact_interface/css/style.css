@@ -216,6 +216,8 @@ body {
   margin: 0;
   padding: 0;
   line-height: 1;
+  position: absolute;
+  left: 20px;
 }
 
 .brand-veri {
@@ -1874,7 +1876,169 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 120%;
+  width: 100%;
+}
+
+/* Archive modal specific accordion item styling */
+#archiveModal .accordion-item {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+#archiveModal .accordion-item.open {
+  background: var(--panel);
+  box-shadow: inset 0 0 4px rgba(255,255,255,0.15);
+}
+
+#archiveModal .accordion-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.02);
+  transition: background 0.2s ease;
+}
+
+#archiveModal .accordion-header:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+#archiveModal .accordion-content {
+  padding: 0 16px;
+  border-top: 1px solid var(--border);
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+}
+
+#archiveModal .accordion-item.open .accordion-content {
+  max-height: 400px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+#archiveModal .archive-select-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+#archiveModal .archive-select {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+#archiveModal .card-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+#archiveModal .mini-icon {
+  width: 32px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+#archiveModal .item-title {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#archiveModal .accordion-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#archiveModal .accordion-toggle:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+#archiveModal .accordion-toggle .fa {
+  transition: transform 0.3s ease;
+}
+
+#archiveModal .accordion-item.open .accordion-toggle .fa {
+  transform: rotate(180deg);
+}
+
+#archiveModal .card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#archiveModal .archive-delete-btn {
+  background: var(--panel-outer);
+  color: var(--text);
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  outline-color: none;
+  border: 1px solid var(--border)
+}
+
+#archiveModal .archive-delete-btn:hover {
+  background: rgba(255,255,255,0.04);
+  
+}
+
+#archiveModal .sidebar-summary {
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+#archiveModal .sidebar-sources {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#archiveModal .sidebar-sources li {
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+#archiveModal .sidebar-sources a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+#archiveModal .sidebar-sources a:hover {
+  text-decoration: underline;
 }
 
 /* Targeted archive modal sizing and internal scroll
@@ -1956,6 +2120,14 @@ body {
   font-size: 12px;
 }
 
+.modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+}
+
 
 
 .btn-primary, .btn-secondary {
@@ -1967,6 +2139,7 @@ body {
 
 .modal .btn-primary {
   background: var(--brand-veri);
+  border: 2px solid var(--border);
   color: #fff;
 }
 
@@ -1992,7 +2165,7 @@ body {
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 1px, 1px);
+  clip: rect(0,0,0,0);
   white-space: nowrap;
   border: 0;
 }
