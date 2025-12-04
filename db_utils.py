@@ -9,7 +9,7 @@ def get_db_connection():
         conn = psycopg2.connect(
             host="127.0.0.1",  # Force IPv4
             user="postgres",
-            password="123",
+            password="lenroy3221",
             database="websearch_demo",
             cursor_factory=psycopg2.extras.RealDictCursor
         )

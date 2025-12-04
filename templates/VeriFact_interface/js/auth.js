@@ -99,15 +99,7 @@
     function handleSubmit(form, url, isSignup = false) {
         form.addEventListener('submit', function(e){
             e.preventDefault();
-            
-            // For signup, validate terms checkbox
-            if (isSignup) {
-                const agreeCheckbox = form.querySelector('input[name="agree_terms"]');
-                if (!agreeCheckbox || !agreeCheckbox.checked) {
-                    showCustomNotification('You must agree to the Terms and Conditions and Data Privacy Policy to create an account.', 'error');
-                    return;
-                }
-            }
+        
             
             var body = toJSON(form);
             fetch(url, {

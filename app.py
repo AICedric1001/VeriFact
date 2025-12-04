@@ -22,8 +22,11 @@ from ai_summary import generate_summary_from_text, generate_followup_reply
 from werkzeug.security import generate_password_hash, check_password_hash
 import spacy
 import re
+from admin_routes import admin_bp
 
 app = Flask(__name__)
+
+app.register_blueprint(admin_bp)
 
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "fallback-insecure-dev-key")
 
@@ -350,7 +353,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="localhost",
         user="postgres",
-        password="Corl4453",  #Change this to your own password Corl4453
+        password="lenroy3221",  #Change this to your own password Corl4453
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
