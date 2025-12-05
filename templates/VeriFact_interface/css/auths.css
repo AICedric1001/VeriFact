@@ -364,17 +364,20 @@ canvas#aurora-bg {
   background: var(--btn-outline-hover);
 }
 
+
+
 /* Terms and Privacy Content Styles */
 .terms-content,
 .privacy-content {
   color: var(--text);
-  line-height: 1.6;
+  line-height: 1.7;
+  padding: 1.5rem;
 }
 
 .terms-section,
 .privacy-section {
-  margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 2rem;
   border-bottom: 1px solid var(--panel-border);
 }
 
@@ -389,7 +392,8 @@ canvas#aurora-bg {
   color: var(--brand-fact);
   font-size: 1.1rem;
   font-weight: 600;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  margin-top: 1rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -403,28 +407,29 @@ canvas#aurora-bg {
 
 .terms-section p,
 .privacy-section p {
-  margin-bottom: 1rem;
+  margin-bottom: 1.2rem;
   color: var(--text);
+  line-height: 1.7;
 }
 
 .terms-section ul,
 .privacy-section ul {
-  margin: 1rem 0;
-  padding-left: 1.5rem;
+  margin: 1.5rem 0;
+  padding-left: 2rem;
   color: var(--text);
 }
 
 .terms-section li,
 .privacy-section li {
-  margin-bottom: 0.5rem;
-  line-height: 1.5;
+  margin-bottom: 0.8rem;
+  line-height: 1.6;
 }
 
 .data-types h5 {
   color: var(--brand-fact);
   font-size: 1rem;
   font-weight: 600;
-  margin: 1.5rem 0 0.75rem 0;
+  margin: 2rem 0 1rem 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -432,8 +437,8 @@ canvas#aurora-bg {
 
 .terms-acceptance,
 .privacy-acceptance {
-  margin-top: 2rem;
-  padding: 1.5rem;
+  margin-top: 2.5rem;
+  padding: 2rem;
   background: var(--panel);
   border: 1px solid var(--brand-fact);
   border-radius: 8px;
@@ -469,101 +474,3 @@ canvas#aurora-bg {
   }
 }
 
-/* Terms Checkbox Styles */
-.terms-checkbox {
-  justify-content: flex-start;
-  margin: 1rem 0;
-  padding: 0;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--text);
-  margin: 0;
-}
-
-.checkbox-label input[type="checkbox"] {
-  display: none;
-}
-
-.checkmark {
-  position: relative;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--btn-outline);
-  border-radius: 4px;
-  background: transparent;
-  flex-shrink: 0;
-  margin-top: 2px;
-  transition: all 0.2s ease;
-}
-
-.checkbox-label input[type="checkbox"]:checked + .checkmark {
-  background: var(--brand-fact);
-  border-color: var(--brand-fact);
-}
-
-.checkbox-label input[type="checkbox"]:checked + .checkmark::after {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: var(--bg);
-  font-size: 12px;
-  font-weight: bold;
-}
-
-.checkbox-text {
-  flex: 1;
-}
-
-.checkbox-text a {
-  color: var(--brand-fact);
-  text-decoration: none;
-  font-weight: 600;
-  transition: color 0.2s ease;
-}
-
-.checkbox-text a:hover {
-  color: var(--brand-veri);
-  text-decoration: underline;
-}
-
-/* Checkbox hover effects */
-.checkbox-label:hover .checkmark {
-  border-color: var(--brand-fact);
-}
-
-.checkbox-label:has(input:checked) .checkmark {
-  background: var(--brand-fact);
-  border-color: var(--brand-fact);
-}
-
-/* Mobile checkbox adjustments */
-@media (max-width: 480px) {
-  .checkbox-label {
-    font-size: 13px;
-  }
-  
-  .checkmark {
-    width: 16px;
-    height: 16px;
-    margin-top: 1px;
-  }
-  
-  .checkbox-label input[type="checkbox"]:checked + .checkmark::after {
-    font-size: 10px;
-  }
-}
-
-
-
-        
-
-        

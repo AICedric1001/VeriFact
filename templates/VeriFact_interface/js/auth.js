@@ -199,14 +199,14 @@ document.querySelectorAll('.toggle-password').forEach(icon => {
     gradient.addColorStop(0.75, '#9900ff');
     
     ctx.fillStyle = gradient;
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = 0.6;
 
     for (let i = 0; i < 5; i++) {
         ctx.beginPath();
         for (let x = 0; x <= canvas.width; x += 8) {
         let y =
-            Math.sin(x * 0.005 + t / 40 + i) * 60 +
-            Math.cos(x * 0.008 + t / 50 + i * 20) * 40 +
+            Math.sin(x * 0.005 + t / 20 + i) * 60 +
+            Math.cos(x * 0.008 + t / 20 + i * 20) * 40 +
             canvas.height / 2;
         ctx.lineTo(x, y);
         }

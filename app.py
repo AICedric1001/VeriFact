@@ -43,11 +43,10 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 TRUSTED_DOMAINS = [
     'rappler.com',
     'inquirer.net',
-    'verafiles.org',
+    'verafiles.org', 
     'philstar.com',
     'abs-cbn.com',
     'tsek.ph',
-    'wikipedia.org'
 ]
 MAX_RELEVANT_SOURCES = int(os.getenv("VERIFACT_MAX_RELEVANT_SOURCES", "12"))
 TRUSTED_SOURCE_WEIGHT = float(os.getenv("VERIFACT_TRUSTED_SOURCE_WEIGHT", "0.25"))
