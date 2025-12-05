@@ -121,10 +121,7 @@
                 </aside>
 
                 <section class="page-container chat-panel">
-                     <div class="ai-disclaimer-banner" style="background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; padding: 8px 12px; margin: 12px; border-radius: 6px; font-size: 13px; color: #d97706;">
-        <i class="fa fa-exclamation-triangle"></i> 
-        <strong>Disclaimer:</strong> AI might make mistakes. Please verify sources and output carefully.
-    </div>
+            
                     <div class="chat-container" id="chatContainer">
                         <div class="chat-box" id="chatBox">
                         </div>
@@ -144,10 +141,15 @@
                             <textarea id="userInput" name="userInput" placeholder="Ask A Question..." rows="1"></textarea>
 
                             <div class="bottom-row">
+                                <div class="ai-disclaimer-banner" style=" padding: 8px 12px; margin: 12px; border-radius: 6px; font-size: 13px; color: #b1b1b1;">
+        <i class="fa fa-info-circle"></i> 
+         AI might make mistakes. Please verify sources and output carefully.
+    </div>
+
                                 <div class="left-icons"></div>
 
                                 <div class="right-icons">
-                                    <button class="mic-btn" aria-label="Voice Input" type="button"><i class="fas fa-microphone"></i></button>
+                                    
                                     <button onclick="sendMessage()" aria-label="Send Message" class="send-btn" type="button"><i class="fas fa-arrow-up"></i></button>
                                 </div>
                             </div>

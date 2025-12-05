@@ -15,6 +15,12 @@ function sendMessage(force = false) {
     emptyState.style.display = 'none';
   }
   
+  // Hide disclaimer when user sends a message
+  const disclaimer = document.querySelector('.ai-disclaimer-banner');
+  if (disclaimer) {
+    disclaimer.style.display = 'none';
+  }
+  
   // Move chat input to bottom
   if (chatInput) {
     chatInput.classList.remove("centered");
