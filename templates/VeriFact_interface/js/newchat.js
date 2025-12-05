@@ -250,24 +250,26 @@ class ChatManager {
               <p class="resp-summary">${escapeHtml(messageData.summary)}</p>
               <hr>
               <strong>Analysis</strong>
-              <p class="resp-analysis">According to the analysis, this information is <strong>${messageData.accuracy.true_percent}% credible</strong> based on source reliability.</p>
+              <p class="resp-analysis">${messageData.accuracy.status_message || `According to the analysis, this information is <strong>${messageData.accuracy.true_percent || 0}% credible</strong> based on source reliability.`}</p>
 
               <!-- Accuracy Card -->
               <div class="accuracy-card response-accuracy-card">
                 <div class="accuracy-bar">
                   <span class="true-label">
                     <i class="fa fa-check-circle"></i> 
-                    <span class="true-percent">${messageData.accuracy.true_percent}</span>%
+                    <span class="true-percent">${messageData.accuracy.true_percent || 0}</span>%
                   </span>
                   <div class="bar range-bar">
-                    <div class="true" style="width: ${messageData.accuracy.true_percent}%"></div>
-                    <div class="false" style="width: ${messageData.accuracy.false_percent}%"></div>
+                    <div class="true" style="width: ${messageData.accuracy.true_percent || 0}%"></div>
+                    <div class="neutral" style="width: ${messageData.accuracy.neutral_percent || 0}%; background-color: #ffc107;"></div>
+                    <div class="false" style="width: ${messageData.accuracy.false_percent || 0}%"></div>
                   </div>
                   <span class="false-label">
-                    <span class="false-percent">${messageData.accuracy.false_percent}</span>% 
+                    <span class="false-percent">${messageData.accuracy.false_percent || 0}</span>% 
                     <i class="fa fa-exclamation-triangle"></i>
                   </span>
                 </div>
+                ${messageData.accuracy.neutral_percent > 0 ? `<div style="text-align: center; margin-top: 8px; color: #666; font-size: 12px;">Neutral: ${messageData.accuracy.neutral_percent}% (${messageData.accuracy.true_count || 0} verified, ${messageData.accuracy.neutral_count || 0} neutral, ${messageData.accuracy.false_count || 0} false)</div>` : ''}
               </div>
 
               <hr>

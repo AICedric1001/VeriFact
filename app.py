@@ -106,47 +106,122 @@ def parse_results_payload(results_payload):
     return results_payload
 
 def calculate_source_metrics(results_payload, summary_text=None):
-    """Calculate credibility metrics combining coverage and trusted domains."""
+    """
+    Calculate credibility metrics using new scoring system:
+    - TRUE (Green): +20 - Trusted domain AND content extracted
+    - NEUTRAL (Yellow): 0 - Trusted domain but extraction failed OR non-trusted domain
+    - FALSE (Red): -20 - Reserved for future manual/user verdict
+    
+    Raw Score = sum(interpreted_values) / total_sources
+    true_percent = ((raw_score + 20) / 40) * 100
+    """
     results_list = parse_results_payload(results_payload)
     total_count = len(results_list)
+    
+    # Edge case: No sources
+    if total_count == 0:
+        return {
+            'true_percent': 0,
+            'false_percent': 100,
+            'trusted_count': 0,
+            'total_count': 0,
+            'coverage_count': 0,
+            'coverage_ratio': 0,
+            'status_message': '❌ No results found'
+        }
+    
+    # Classify each source and calculate values
+    interpreted_values = []
+    true_count = 0
+    neutral_count = 0
+    false_count = 0
     trusted_count = 0
-
+    
     for item in results_list:
         url = (item.get('url') or '').lower()
-        if any(domain in url for domain in TRUSTED_DOMAINS):
+        content = item.get('content') or ''
+        
+        # Check if domain is trusted
+        is_trusted_domain = any(domain in url for domain in TRUSTED_DOMAINS)
+        
+        # Check if content was successfully extracted
+        # Content is considered extracted if it exists and has meaningful length (> 50 chars)
+        content_extracted = bool(content and len(content.strip()) > 50)
+        
+        # Classify source
+        if is_trusted_domain and content_extracted:
+            # TRUE (Green): Trusted domain AND content extracted
+            interpreted_values.append(20)
+            true_count += 1
             trusted_count += 1
-
+        elif is_trusted_domain and not content_extracted:
+            # NEUTRAL: Trusted domain but extraction failed
+            interpreted_values.append(0)
+            neutral_count += 1
+            trusted_count += 1
+        else:
+            # NEUTRAL: Non-trusted domain (regardless of extraction)
+            interpreted_values.append(0)
+            neutral_count += 1
+        # FALSE (-20) is reserved for future manual/user verdict, not implemented yet
+    
+    # Calculate raw score
+    raw_score = sum(interpreted_values) / total_count if total_count > 0 else 0
+    
+    # Check edge case: All neutral
+    if neutral_count == total_count:
+        true_percent = 50
+        false_percent = 50
+        status_message = '⚠️ Insufficient data'
+    else:
+        # Normalize to 0-100%: true_percent = ((raw_score + 20) / 40) * 100
+        # raw_score ranges from -20 to +20, so (raw_score + 20) ranges from 0 to 40
+        true_percent = int(round(((raw_score + 20) / 40) * 100))
+        true_percent = max(0, min(100, true_percent))  # Clamp to 0-100
+        false_percent = 100 - true_percent
+        status_message = None
+    
+    # Override with summary text indicators if present
+    if summary_text:
+        summary_lower = summary_text.lower()
+        if '❌' in summary_text or 'no results found' in summary_lower:
+            true_percent = 0
+            false_percent = 100
+            status_message = '❌ No results found'
+        elif '⚠️' in summary_text or 'insufficient data' in summary_lower:
+            true_percent = 50
+            false_percent = 50
+            status_message = '⚠️ Insufficient data'
+    
+    # Calculate coverage metrics (keeping for backward compatibility)
     coverage_cap = MAX_RELEVANT_SOURCES if MAX_RELEVANT_SOURCES > 0 else total_count
     coverage_raw = min(total_count, coverage_cap)
     coverage_ratio = (coverage_raw / coverage_cap) if coverage_cap else 0
-    trust_ratio = (trusted_count / total_count) if total_count else 0
-
-    credibility_score = coverage_ratio * (1 + TRUSTED_SOURCE_WEIGHT * trust_ratio)
-    credibility_score = min(credibility_score, 1.0)
-    true_percent = int(round(credibility_score * 100))
-    false_percent = max(0, 100 - true_percent)
-
-    if summary_text:
-        summary_lower = summary_text.lower()
-        if '⚠️' in summary_text or 'unverified' in summary_lower:
-            true_percent = max(30, true_percent - 20)
-        elif '❌' in summary_text or 'no results' in summary_lower:
-            true_percent = 0
-        elif 'could not extract' in summary_lower:
-            true_percent = max(20, true_percent - 30)
-        false_percent = max(0, 100 - true_percent)
-
+    
+    # Calculate neutral_percent
+    neutral_percent = 100 - true_percent - false_percent
+    
     return {
         'true_percent': true_percent,
         'false_percent': false_percent,
+        'neutral_percent': neutral_percent,
         'trusted_count': trusted_count,
         'total_count': total_count,
         'coverage_count': coverage_raw,
-        'coverage_ratio': coverage_ratio
+        'coverage_ratio': coverage_ratio,
+        'true_count': true_count,
+        'neutral_count': neutral_count,
+        'false_count': false_count,
+        'raw_score': raw_score,
+        'status_message': status_message
     }
 
 def persist_credibility_score(cursor, user_id, result_id, metrics):
-    """Save or update aggregated credibility score per result."""
+    """
+    Save or update aggregated credibility score per result.
+    Stores true_percent as credibilityScore in the database.
+    Also stores raw_score and breakdown counts if available.
+    """
     if not user_id or not result_id or not metrics:
         return
 
@@ -158,9 +233,14 @@ def persist_credibility_score(cursor, user_id, result_id, metrics):
     if not article:
         return
 
-    true_score = float(metrics.get('true_percent', 0))
+    # Use true_percent as the credibility score (normalized 0-100%)
+    credibility_score = float(metrics.get('true_percent', 0))
+    true_score = credibility_score
     false_score = float(metrics.get('false_percent', 0))
-    inconclusive_score = max(0.0, 100.0 - true_score - false_score)
+    
+    # Calculate neutral/inconclusive score from neutral_percent or as remainder
+    neutral_score = float(metrics.get('neutral_percent', max(0.0, 100.0 - true_score - false_score)))
+    inconclusive_score = neutral_score  # Using neutral as inconclusive for database
 
     cursor.execute(
         """
@@ -186,7 +266,7 @@ def persist_credibility_score(cursor, user_id, result_id, metrics):
             """,
             (
                 article['article_id'],
-                true_score,
+                credibility_score,  # credibilityScore = true_percent
                 true_score,
                 false_score,
                 inconclusive_score,
@@ -211,7 +291,7 @@ def persist_credibility_score(cursor, user_id, result_id, metrics):
                 user_id,
                 article['article_id'],
                 result_id,
-                true_score,
+                credibility_score,  # credibilityScore = true_percent
                 true_score,
                 false_score,
                 inconclusive_score
@@ -341,7 +421,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="127.0.0.1",
         user="postgres",
-        password="lenroy3221",  #Change this to your own password Corl4453
+        password="radgelwashere4453",  #Change this to your own password Corl4453
         database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -1242,6 +1322,12 @@ def get_chat_history():
                                 'accuracy': {
                                     'true_percent': metrics['true_percent'],
                                     'false_percent': metrics['false_percent'],
+                                    'neutral_percent': metrics.get('neutral_percent', 0),
+                                    'true_count': metrics.get('true_count', 0),
+                                    'neutral_count': metrics.get('neutral_count', 0),
+                                    'false_count': metrics.get('false_count', 0),
+                                    'raw_score': metrics.get('raw_score', 0),
+                                    'status_message': metrics.get('status_message'),
                                     'trusted_count': metrics['trusted_count'],
                                     'total_count': metrics['total_count'],
                                     'coverage_count': metrics['coverage_count']
@@ -1425,7 +1511,13 @@ def get_bot_response(result_id):
                     'sources': sources,
                     'accuracy': {
                         'true_percent': metrics['true_percent'],
-                        'false_percent': metrics['false_percent']
+                        'false_percent': metrics['false_percent'],
+                        'neutral_percent': metrics.get('neutral_percent', 0),
+                        'true_count': metrics.get('true_count', 0),
+                        'neutral_count': metrics.get('neutral_count', 0),
+                        'false_count': metrics.get('false_count', 0),
+                        'raw_score': metrics.get('raw_score', 0),
+                        'status_message': metrics.get('status_message')
                     },
                     'trusted_count': metrics['trusted_count'],
                     'total_count': metrics['total_count'],

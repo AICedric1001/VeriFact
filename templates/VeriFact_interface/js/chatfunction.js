@@ -287,23 +287,25 @@ function buildRichBotMessage(data) {
           <p class="resp-summary">${escapeHtml(data.summary)}</p>
           <hr>
           <strong>Analysis</strong>
-          <p class="resp-analysis">According to the analysis, this information is <strong>${data.accuracy.true_percent}% credible</strong> based on source reliability.</p>
+          <p class="resp-analysis">${data.accuracy.status_message || `According to the analysis, this information is <strong>${data.accuracy.true_percent}% credible</strong> based on source reliability.`}</p>
 
           <div class="accuracy-card response-accuracy-card">
             <div class="accuracy-bar">
               <span class="true-label">
                 <i class="fa fa-check-circle"></i> 
-                <span class="true-percent">${data.accuracy.true_percent}</span>%
+                <span class="true-percent">${data.accuracy.true_percent || 0}</span>%
               </span>
               <div class="bar range-bar">
-                <div class="true" style="width: ${data.accuracy.true_percent}%"></div>
-                <div class="false" style="width: ${data.accuracy.false_percent}%"></div>
+                <div class="true" style="width: ${data.accuracy.true_percent || 0}%"></div>
+                <div class="neutral" style="width: ${data.accuracy.neutral_percent || 0}%; background-color: #ffc107;"></div>
+                <div class="false" style="width: ${data.accuracy.false_percent || 0}%"></div>
               </div>
               <span class="false-label">
-                <span class="false-percent">${data.accuracy.false_percent}</span>% 
+                <span class="false-percent">${data.accuracy.false_percent || 0}</span>% 
                 <i class="fa fa-exclamation-triangle"></i>
               </span>
             </div>
+            ${data.accuracy.neutral_percent > 0 ? `<div style="text-align: center; margin-top: 8px; color: #666; font-size: 12px;">Neutral: ${data.accuracy.neutral_percent}% (${data.accuracy.true_count || 0} verified, ${data.accuracy.neutral_count || 0} neutral, ${data.accuracy.false_count || 0} false)</div>` : ''}
           </div>
 
           <hr>
@@ -898,24 +900,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p class="resp-summary">${escapeHtml(data.summary)}</p>
                 <hr>
                 <strong>Analysis</strong>
-                <p class="resp-analysis">According to the analysis, this information is <strong>${data.accuracy.true_percent}% credible</strong> based on source reliability.</p>
+                <p class="resp-analysis">${data.accuracy.status_message || `According to the analysis, this information is <strong>${data.accuracy.true_percent || 0}% credible</strong> based on source reliability.`}</p>
   
                 <!-- Accuracy Card -->
                 <div class="accuracy-card response-accuracy-card">
                   <div class="accuracy-bar">
                     <span class="true-label">
                       <i class="fa fa-check-circle"></i> 
-                      <span class="true-percent">${data.accuracy.true_percent}</span>%
+                      <span class="true-percent">${data.accuracy.true_percent || 0}</span>%
                     </span>
                     <div class="bar range-bar">
-                      <div class="true" style="width: ${data.accuracy.true_percent}%"></div>
-                      <div class="false" style="width: ${data.accuracy.false_percent}%"></div>
+                      <div class="true" style="width: ${data.accuracy.true_percent || 0}%"></div>
+                      <div class="neutral" style="width: ${data.accuracy.neutral_percent || 0}%; background-color: #ffc107;"></div>
+                      <div class="false" style="width: ${data.accuracy.false_percent || 0}%"></div>
                     </div>
                     <span class="false-label">
-                      <span class="false-percent">${data.accuracy.false_percent}</span>% 
+                      <span class="false-percent">${data.accuracy.false_percent || 0}</span>% 
                       <i class="fa fa-exclamation-triangle"></i>
                     </span>
                   </div>
+                  ${data.accuracy.neutral_percent > 0 ? `<div style="text-align: center; margin-top: 8px; color: #666; font-size: 12px;">Neutral: ${data.accuracy.neutral_percent}% (${data.accuracy.true_count || 0} verified, ${data.accuracy.neutral_count || 0} neutral, ${data.accuracy.false_count || 0} false)</div>` : ''}
                 </div>
   
                 <hr>
