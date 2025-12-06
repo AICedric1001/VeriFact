@@ -292,8 +292,22 @@ function buildRichBotMessage(data) {
           <strong>Summary:</strong>
           <p class="resp-summary">${escapeHtml(data.summary)}</p>
           <hr>
-          <strong>Analysis</strong>
-          <p class="resp-analysis">${data.accuracy.status_message || `According to the analysis, this information is credible based on source reliability.`}</p>
+          <strong>Source Coverage</strong>
+          <div class="donut-chart-wrapper">
+            <svg width="80" height="80" viewBox="0 0 120 120" class="donut-chart">
+              <circle cx="60" cy="60" r="45" fill="none" stroke="#e0e0e0" stroke-width="16"></circle>
+              <circle cx="60" cy="60" r="45" fill="none" stroke="#4caf50" stroke-width="16" 
+                      stroke-dasharray="${(data.accuracy.article_count_N / 10) * 282.7}" 
+                      stroke-dashoffset="0" transform="rotate(-90 60 60)"></circle>
+              <text x="60" y="65" text-anchor="middle" font-size="20" font-weight="bold" fill="currentColor">
+                ${data.accuracy.article_count_N}/10
+              </text>
+            </svg>
+            <div class="coverage-info">
+              <p class="coverage-line-1">${data.accuracy.article_count_N} verified sources found</p>
+              <p class="coverage-line-2">${data.accuracy.status_message || 'Source coverage analysis'}</p>
+            </div>
+          </div>
           <hr>
          
         </div>
@@ -878,29 +892,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 <strong>Summary:</strong>
                 <p class="resp-summary">${escapeHtml(data.summary)}</p>
                 <hr>
-                <strong>Analysis</strong>
-                <p class="resp-analysis">${data.accuracy.status_message || `According to the analysis, this information is <strong>${data.accuracy.true_percent || 0}% credible</strong> based on source reliability.`}</p>
-  
-                <!-- Accuracy Card -->
-                <div class="accuracy-card response-accuracy-card">
-                  <div class="accuracy-bar">
-                    <span class="true-label">
-                      <i class="fa fa-check-circle"></i> 
-                      <span class="true-percent">${data.accuracy.true_percent || 0}</span>%
-                    </span>
-                    <div class="bar range-bar">
-                      <div class="true" style="width: ${data.accuracy.true_percent || 0}%"></div>
-                      <div class="neutral" style="width: ${data.accuracy.neutral_percent || 0}%; background-color: #ffc107;"></div>
-                      <div class="false" style="width: ${data.accuracy.false_percent || 0}%"></div>
-                    </div>
-                    <span class="false-label">
-                      <span class="false-percent">${data.accuracy.false_percent || 0}</span>% 
-                      <i class="fa fa-exclamation-triangle"></i>
-                    </span>
+                <strong>Source Coverage</strong>
+                <div class="donut-chart-wrapper">
+                  <svg width="80" height="80" viewBox="0 0 120 120" class="donut-chart">
+                    <circle cx="60" cy="60" r="45" fill="none" stroke="#e0e0e0" stroke-width="16"></circle>
+                    <circle cx="60" cy="60" r="45" fill="none" stroke="#4caf50" stroke-width="16" 
+                            stroke-dasharray="${(data.accuracy.article_count_N / 10) * 282.7}" 
+                            stroke-dashoffset="0" transform="rotate(-90 60 60)"></circle>
+                    <text x="60" y="65" text-anchor="middle" font-size="20" font-weight="bold" fill="currentColor">
+                      ${data.accuracy.article_count_N}/10
+                    </text>
+                  </svg>
+                  <div class="coverage-info">
+                    <p class="coverage-line-1">${data.accuracy.article_count_N} verified sources found</p>
+                    <p class="coverage-line-2">${data.accuracy.status_message || 'Source coverage analysis'}</p>
                   </div>
-                  ${data.accuracy.neutral_percent > 0 ? `<div style="text-align: center; margin-top: 8px; color: #666; font-size: 12px;">Neutral: ${data.accuracy.neutral_percent}% (${data.accuracy.true_count || 0} verified, ${data.accuracy.neutral_count || 0} neutral, ${data.accuracy.false_count || 0} false)</div>` : ''}
                 </div>
-  
                 <hr>
                
               </div>

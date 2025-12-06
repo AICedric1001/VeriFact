@@ -249,8 +249,19 @@ class ChatManager {
               <strong>Summary:</strong>
               <p class="resp-summary">${escapeHtml(messageData.summary)}</p>
               <hr>
-              <strong>Analysis</strong>
-              <p class="resp-analysis">${messageData.accuracy.status_message || `According to the analysis, this information is credible based on source reliability.`}</p>
+              <strong>Source Coverage</strong>
+              <div class="donut-chart-container">
+                <svg width="120" height="120" viewBox="0 0 120 120" class="donut-chart">
+                  <circle cx="60" cy="60" r="45" fill="none" stroke="#e0e0e0" stroke-width="16"></circle>
+                  <circle cx="60" cy="60" r="45" fill="none" stroke="#4caf50" stroke-width="16" 
+                          stroke-dasharray="${(messageData.accuracy.article_count_N / 10) * 282.7}" 
+                          stroke-dashoffset="0" transform="rotate(-90 60 60)"></circle>
+                  <text x="60" y="65" text-anchor="middle" font-size="20" font-weight="bold" fill="currentColor">
+                    ${messageData.accuracy.article_count_N}/10
+                  </text>
+                </svg>
+              </div>
+              <p class="source-coverage-text">${messageData.accuracy.status_message || 'Source coverage based on article count'}</p>
               <hr>
              
             </div>
