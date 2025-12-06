@@ -152,7 +152,7 @@ def main_system(query, api_key=None, use_trusted_sources=True):
         if has_api_key:
             print("🛰️  Using SerpAPI for search (all sources)...")
             # Search WITHOUT site filter to get all sources
-            top_results = search_serpapi(search_query, api_key, site_filter=None)
+            top_results = search_serpapi(search_query, api_key, site_filter=FILTERED_DOMAINS)
             links_with_meta = top_results  # list of dicts with title, url
         else:
             print("🧭 Using basic Google search fallback…")
