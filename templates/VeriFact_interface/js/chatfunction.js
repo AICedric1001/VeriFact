@@ -982,3 +982,212 @@ document.addEventListener('DOMContentLoaded', function() {
       showNotification('Error generating response. Please try again.', 'error');
     });
   }
+
+  // Add this helper function to chatfunction.js to ensure donut chart displays correctly
+
+function buildDonutChart(accuracy, articleCount) {
+  // Ensure articleCount defaults to accuracy data if not provided
+  const count = articleCount || accuracy.true_count || 0;
+  const maxCount = 10;
+  
+  // Calculate fill percentage for the donut chart
+  // Use article_count if available, otherwise use true_count from accuracy
+  const fillPercentage = (count / maxCount) * 282.7;
+  
+  // Determine status message based on accuracy data
+  let statusMessage = accuracy.status_message || '';
+  
+  // Override status based on accuracy percentages
+  if (accuracy.true_percent === 0 && accuracy.false_percent === 100) {
+    statusMessage = accuracy.status_message || '❌ No verified sources or claim not confirmed';
+  } else if (accuracy.true_percent === 50 && accuracy.false_percent === 50) {
+    statusMessage = accuracy.status_message || '⚠️ Insufficient data';
+  } else if (count === 0) {
+    statusMessage = '❌ No verified sources found';
+  } else {
+    statusMessage = statusMessage || `${count} verified source${count !== 1 ? 's' : ''} analyzed`;
+  }
+  
+  return `
+    <div class="donut-chart-wrapper">
+      <svg width="80" height="80" viewBox="0 0 120 120" class="donut-chart">
+        <circle cx="60" cy="60" r="45" fill="none" stroke="#e0e0e0" stroke-width="16"></circle>
+        <circle cx="60" cy="60" r="45" fill="none" stroke="${count > 0 ? '#4caf50' : '#9e9e9e'}" stroke-width="16" 
+                stroke-dasharray="${fillPercentage} 282.7" 
+                stroke-dashoffset="0" transform="rotate(-90 60 60)"></circle>
+        <text x="60" y="65" text-anchor="middle" font-size="20" font-weight="bold" fill="currentColor">
+          ${count}/${maxCount}
+        </text>
+      </svg>
+      <div class="coverage-info">
+        <p class="coverage-line-1">${count} verified source${count !== 1 ? 's' : ''} found</p>
+        <p class="coverage-line-2">${statusMessage}</p>
+      </div>
+    </div>
+  `;
+}
+
+// Update buildRichBotMessage to use the new helper
+function buildRichBotMessage(data) {
+  const botMsg = document.createElement('div');
+  botMsg.className = 'bot-message';
+
+  const sourcesForArchive = Array.isArray(data.sources) ? data.sources : [];
+  botMsg._sourcesForArchive = sourcesForArchive;
+
+  // ✅ Get article count with proper fallback
+  const articleCount = data.article_count || (data.accuracy ? data.accuracy.true_count : 0) || 0;
+  
+  // Generate donut chart HTML
+  const donutChartHtml = buildDonutChart(data.accuracy || {}, articleCount);
+
+  botMsg.innerHTML = `
+    <div class="accordion-item" open>
+      <div class="accordion-header">
+        <div class="url-row">
+          <strong>Response</strong>
+          <span class="response-title">${escapeHtml(data.query)}</span>
+        </div>
+        <div class="card-right">
+          <button class="icon-btn save-response-btn" type="button" title="Save response">
+            <i class="fa fa-save"></i>
+          </button>
+        </div>
+        <button class="accordion-toggle" aria-expanded="true"><i class="fa fa-angle-double-down"></i></button>
+      </div>
+      <div class="accordion-content">
+        <div class="response-section">
+          <strong>Summary:</strong>
+          <p class="resp-summary">${escapeHtml(data.summary)}</p>
+          <hr>
+          <strong>Source Coverage</strong>
+          ${donutChartHtml}
+          <hr>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Wire up accordion toggle
+  const toggleBtn = botMsg.querySelector('.accordion-toggle');
+  const accordionItem = botMsg.querySelector('.accordion-item');
+  if (toggleBtn && accordionItem) {
+    toggleBtn.addEventListener('click', () => {
+      if (accordionItem.classList.contains('open')) {
+        closeAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        openAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+
+  // Wire up save button
+  const saveBtn = botMsg.querySelector('.save-response-btn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveResponseToArchive(botMsg, sourcesForArchive);
+      saveBtn.classList.add('saved');
+      saveBtn.title = 'Saved';
+      showNotification('Saved response to Archive', 'success');
+    });
+  }
+  
+  return botMsg;
+}
+
+// Update the chatManager buildBotMessage to use consistent logic
+function buildBotMessageForHistory(messageData) {
+  const botMsg = document.createElement('div');
+  botMsg.className = 'bot-message';
+
+  // Determine if this is a rich message (has summary + sources) or simple follow-up
+  const isRichMessage = messageData.summary && messageData.sources;
+
+  if (isRichMessage) {
+    // Get article count from accuracy data with proper fallback
+    const articleCount = messageData.accuracy?.article_count || messageData.accuracy?.true_count || 0;
+    const donutChartHtml = buildDonutChart(messageData.accuracy || {}, articleCount);
+
+    // Rich message with accordion, summary, accuracy, sources
+    botMsg.innerHTML = `
+      <div class="accordion-item">
+        <div class="accordion-header">
+          <div class="url-row">
+            <strong>Response</strong>
+            <span class="response-title">${escapeHtml((messageData.summary || '').substring(0, 50) + '...')}</span>
+          </div>
+          <div class="card-right">
+            <button class="icon-btn save-response-btn" type="button" title="Save response">
+              <i class="fa fa-save"></i>
+            </button>
+          </div>
+          <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+        </div>
+        <div class="accordion-content">
+          <div class="response-section">
+            <strong>Summary:</strong>
+            <p class="resp-summary">${escapeHtml(messageData.summary)}</p>
+            <hr>
+            <strong>Source Coverage</strong>
+            ${donutChartHtml}
+            <hr>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const sourcesForArchive = Array.isArray(messageData.sources) ? messageData.sources : [];
+    botMsg._sourcesForArchive = sourcesForArchive;
+
+    // Wire up save button
+    const saveBtn = botMsg.querySelector('.save-response-btn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof saveResponseToArchive === 'function') {
+          saveResponseToArchive(botMsg, sourcesForArchive);
+        }
+        saveBtn.classList.add('saved');
+        saveBtn.title = 'Saved';
+        if (typeof showNotification === 'function') {
+          showNotification('Saved response to Archive', 'success');
+        }
+      });
+    }
+  } else {
+    // Simple follow-up message
+    botMsg.innerHTML = `
+      <div class="accordion-item">
+        <div class="accordion-header">
+          <div class="url-row">
+            <strong>Response</strong>
+          </div>
+          <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+        </div>
+        <div class="accordion-content">
+          <p>${escapeHtml(messageData.content)}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  // Wire up accordion toggle
+  const toggleBtn = botMsg.querySelector('.accordion-toggle');
+  const accordionItem = botMsg.querySelector('.accordion-item');
+  if (toggleBtn && accordionItem) {
+    toggleBtn.addEventListener('click', () => {
+      if (accordionItem.classList.contains('open')) {
+        closeAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'false');
+      } else {
+        openAccordion(accordionItem);
+        toggleBtn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+
+  return botMsg;
+}

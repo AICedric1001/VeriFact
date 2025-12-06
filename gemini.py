@@ -37,26 +37,48 @@ safety_config = [
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Correct model instantiation
-model = genai.GenerativeModel("models/gemini-2.0-flash", safety_settings=safety_config)  # NOTE: full path with "models/"
-# You can also use: "models/gemini-pro" or just check with genai.list_models()
+model = genai.GenerativeModel("models/gemini-2.0-flash", safety_settings=safety_config)
 
 
-def summarize_with_gemini(text):
-    if not text or len(text.strip()) < 100:
+def summarize_with_gemini(text_or_prompt):
+    """
+    Enhanced summarization function that handles both simple text and complex prompts.
+    Supports relevance checking and contextual analysis.
+    """
+    if not text_or_prompt or len(text_or_prompt.strip()) < 20:
         return "❌ Not enough content to summarize."
 
-    prompt = (
-        "Summarize the following news text into a short, factual paragraph. "
-        "Avoid opinions and speculation. Only summarize verified claims.\n\n"
-        f"{text}"
-    )
+    # Check if this is already a formatted prompt (contains specific instructions)
+    is_formatted_prompt = any(keyword in text_or_prompt for keyword in [
+        "TASK:", "User Query:", "determine if", "respond with:"
+    ])
+
+    if is_formatted_prompt:
+        # Use the prompt as-is (for relevance checking)
+        prompt = text_or_prompt
+    else:
+        # Create a basic summarization prompt
+        prompt = (
+            "Summarize the following news text into a short, factual paragraph. "
+            "Avoid opinions and speculation. Only summarize verified claims.\n\n"
+            f"{text_or_prompt}"
+        )
 
     try:
         response = model.generate_content(prompt)
-        return response.text.strip()
+        result = response.text.strip()
+        
+        # If result is empty or too short, provide fallback
+        if not result or len(result) < 20:
+            return "⚠️ Unable to generate a meaningful summary from the available sources."
+        
+        return result
     except Exception as e:
-        print("❌ Gemini API Error (Content likely blocked by safety filter):", e)
-        return "⚠️ Failed to generate summary."
+        print("❌ Gemini API Error:", e)
+        # Check if it's a safety filter issue
+        if "safety" in str(e).lower() or "blocked" in str(e).lower():
+            return "⚠️ Content was blocked by safety filters. Unable to generate summary."
+        return "⚠️ Failed to generate summary due to technical error."
 
 
 def respond_with_gemini(prompt):
@@ -66,9 +88,15 @@ def respond_with_gemini(prompt):
 
     try:
         response = model.generate_content(prompt)
-        return response.text.strip()
+        result = response.text.strip()
+        
+        # If result is empty, provide fallback
+        if not result:
+            return "⚠️ Unable to generate a response. Please try rephrasing your question."
+        
+        return result
     except Exception as e:
         print("❌ Gemini Chat Error:", e)
+        if "safety" in str(e).lower() or "blocked" in str(e).lower():
+            return "⚠️ Response was blocked by safety filters. Please rephrase your question."
         return "⚠️ Failed to generate follow-up response."
-
-

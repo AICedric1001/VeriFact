@@ -1562,6 +1562,117 @@ def get_trending_searches_public():
         traceback.print_exc()
         return jsonify({'success': False, 'message': 'Failed to retrieve trending searches'}), 500
 
+def calculate_source_metrics(results_payload, summary_text=None):
+    """
+    Calculate credibility metrics - ONLY count verified sources with extracted content
+
+    Scoring system:
+    - TRUE (Green): +20 - Verified trusted domain AND content extracted successfully
+    - NEUTRAL (Yellow): 0 - Verified domain but extraction failed
+    - Unverified sources are NOT included in counts
+
+    Raw Score = sum(interpreted_values) / total_verified_sources
+    true_percent = ((raw_score + 20) / 40) * 100
+    """
+    results_list = parse_results_payload(results_payload)
+
+    # Filter to only verified/trusted sources
+    verified_results = [
+        item for item in results_list
+        if item.get('verified', False) or item.get('is_trusted', False)
+    ]
+    total_count = len(verified_results)
+
+    if total_count == 0:
+        return {
+            'true_percent': 0,
+            'false_percent': 100,
+            'neutral_percent': 0,
+            'trusted_count': 0,
+            'total_count': 0,
+            'coverage_count': 0,
+            'coverage_ratio': 0,
+            'true_count': 0,
+            'neutral_count': 0,
+            'false_count': 0,
+            'raw_score': -20,
+            'status_message': '❌ No verified sources found'
+        }
+
+    interpreted_values = []
+    true_count = 0
+    neutral_count = 0
+    false_count = 0  # For legacy, keep but always zero in this system
+    trusted_count = total_count
+
+    for item in verified_results:
+        content = (item.get('content') or '').strip()
+        content_extracted = bool(content and len(content) > 50)
+        if content_extracted:
+            interpreted_values.append(20)
+            true_count += 1
+        else:
+            interpreted_values.append(0)
+            neutral_count += 1
+
+    raw_score = sum(interpreted_values) / total_count if total_count > 0 else -20
+
+    # By default, neutral_percent is always 0 in this two-level system
+    if neutral_count == total_count:
+        true_percent = 50
+        false_percent = 50
+        neutral_percent = 0
+        status_message = '⚠️ Insufficient data - sources found but content not extracted'
+    else:
+        true_percent = int(round(((raw_score + 20) / 40) * 100))
+        true_percent = max(0, min(100, true_percent))
+        false_percent = 100 - true_percent
+        neutral_percent = 0
+        status_message = None
+
+    # Summary/AI override logic (most restrictive takes precedence)
+    if summary_text:
+        summary_lower = summary_text.lower()
+        if '❌' in summary_text or 'no available sources' in summary_lower or 'no verified sources' in summary_lower:
+            true_percent = 0
+            false_percent = 100
+            neutral_percent = 0
+            true_count = 0
+            neutral_count = 0
+            raw_score = -20
+            status_message = '❌ No verified sources found'
+        elif '⚠️' in summary_text and ('not related' in summary_lower or 'do not support' in summary_lower or 'not confirm' in summary_lower):
+            true_percent = 0
+            false_percent = 100
+            neutral_percent = 0
+            raw_score = -20
+            status_message = '⚠️ Sources do not confirm specific claim'
+        elif '⚠️' in summary_text and ('insufficient data' in summary_lower or 'could not extract' in summary_lower):
+            true_percent = 50
+            false_percent = 50
+            neutral_percent = 0
+            status_message = '⚠️ Insufficient data'
+
+    # Handle coverage metrics
+    coverage_cap = MAX_RELEVANT_SOURCES if 'MAX_RELEVANT_SOURCES' in globals() and MAX_RELEVANT_SOURCES > 0 else total_count
+    coverage_raw = min(total_count, coverage_cap)
+    coverage_ratio = (coverage_raw / coverage_cap) if coverage_cap else 0
+
+    return {
+        'true_percent': true_percent,
+        'false_percent': false_percent,
+        'neutral_percent': neutral_percent,
+        'trusted_count': trusted_count,
+        'total_count': total_count,
+        'coverage_count': coverage_raw,
+        'coverage_ratio': coverage_ratio,
+        'true_count': true_count,
+        'neutral_count': neutral_count,
+        'false_count': false_count,
+        'raw_score': raw_score,
+        'status_message': status_message
+    }
+
 @app.route('/api/chat/save_history', methods=['POST'])
 def save_chat_history():
     try:
