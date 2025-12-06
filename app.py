@@ -216,89 +216,6 @@ def calculate_source_metrics(results_payload, summary_text=None):
         'status_message': status_message
     }
 
-def persist_credibility_score(cursor, user_id, result_id, metrics):
-    """
-    Save or update aggregated credibility score per result.
-    Stores true_percent as credibilityScore in the database.
-    Also stores raw_score and breakdown counts if available.
-    """
-    if not user_id or not result_id or not metrics:
-        return
-
-    cursor.execute(
-        "SELECT article_id FROM articles WHERE result_id = %s ORDER BY article_id ASC LIMIT 1",
-        (result_id,)
-    )
-    article = cursor.fetchone()
-    if not article:
-        return
-
-    # Use true_percent as the credibility score (normalized 0-100%)
-    credibility_score = float(metrics.get('true_percent', 0))
-    true_score = credibility_score
-    false_score = float(metrics.get('false_percent', 0))
-    
-    # Calculate neutral/inconclusive score from neutral_percent or as remainder
-    neutral_score = float(metrics.get('neutral_percent', max(0.0, 100.0 - true_score - false_score)))
-    inconclusive_score = neutral_score  # Using neutral as inconclusive for database
-
-    cursor.execute(
-        """
-        SELECT credible_id FROM credibilityscore
-        WHERE user_id = %s AND result_id = %s
-        LIMIT 1
-        """,
-        (user_id, result_id)
-    )
-    existing = cursor.fetchone()
-
-    if existing:
-        cursor.execute(
-            """
-            UPDATE credibilityscore
-            SET article_id = %s,
-                credibilityscorefull = %s,
-                true_score = %s,
-                false_score = %s,
-                inconclusive_score = %s,
-                created_at = CURRENT_TIMESTAMP
-            WHERE credible_id = %s
-            """,
-            (
-                article['article_id'],
-                credibility_score,  # credibilityScore = true_percent
-                true_score,
-                false_score,
-                inconclusive_score,
-                existing['credible_id']
-            )
-        )
-    else:
-        cursor.execute(
-            """
-            INSERT INTO credibilityscore (
-                user_id,
-                article_id,
-                result_id,
-                credibilityscorefull,
-                true_score,
-                false_score,
-                inconclusive_score
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            (
-                user_id,
-                article['article_id'],
-                result_id,
-                credibility_score,  # credibilityScore = true_percent
-                true_score,
-                false_score,
-                inconclusive_score
-            )
-        )
-
-
 def get_search_context(cursor, user_id, search_id=None):
     """Retrieve latest search/query/result context for follow-up chats."""
     search_row = None
@@ -422,7 +339,7 @@ def get_db_connection():
         host="127.0.0.1",
         user="postgres",
         password="radgelwashere4453",  #Change this to your own password Corl4453
-        database="websearch_demo",
+        database="newVeriFactDB",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
 
@@ -574,10 +491,17 @@ def search():
                                     ON CONFLICT (article_url) DO NOTHING
                                     """
                                 )
+                                article_cnt = len([i for i in [item] if i.get('content') and len(i['content'].strip()) > 50])
+                                cursor.execute(
+                                    "INSERT INTO articlecount (result_id, count) VALUES (%s, %s)",
+                                    (result_id, article_cnt)
+                                )
                                 cursor.execute(
                                     insert_article_sql,
                                     (title or '', content, url, source_name or '', None, result_id)
                                 )
+                                # --- record how many articles were actually stored ---
+                                
 
                         # Extract categories from user search text and store in categories table
                         if search_id:  # Only extract categories if we have a search_id
@@ -616,7 +540,6 @@ def search():
                                 """
                                 cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, summary_text))
                                 metrics = calculate_source_metrics(results, summary_text)
-                                persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                                 print("✅ AI summary stored successfully")
                                 
                             except Exception as summary_error:
@@ -629,7 +552,6 @@ def search():
                                 """
                                 cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, fallback_summary))
                                 metrics = calculate_source_metrics(results, fallback_summary)
-                                persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                     db.commit()
             except Exception as e:
                 print("❌ DB Insert Error:", e)
@@ -762,6 +684,9 @@ def api_scrape():
                 search_id = search_id_to_use
 
                 # Insert each article as its own row linked to this result_id
+                # Store each article as its own row in articles table
+                article_count = 0  # Initialize counter before loop
+
                 for item in results:
                     url = item.get('url')
                     title = item.get('title')
@@ -770,12 +695,12 @@ def api_scrape():
                     # Safety checks for scraped URL and content
                     safe_url, url_reason = is_url_safe(url)
                     if not safe_url:
-                        print(f"❌ Skipping unsafe URL in /api/scrape: {url} - {url_reason}")
+                        print(f"❌ Skipping unsafe URL: {url} - {url_reason}")
                         continue
 
                     safe_content, content_reason = is_content_safe(content or '')
                     if not safe_content:
-                        print(f"❌ Skipping harmful content in /api/scrape for URL: {url} - {content_reason}")
+                        print(f"❌ Skipping harmful content for URL: {url} - {content_reason}")
                         continue
                  
                     # Derive source_name from domain
@@ -799,6 +724,15 @@ def api_scrape():
                             insert_article_sql,
                             (title or '', content, url, source_name or '', None, result_id)
                         )
+                        # Count only articles with meaningful content (>50 chars)
+                        if content and len(content.strip()) > 50:
+                            article_count += 1
+
+                # AFTER the loop - insert count ONCE per result_id
+                cursor.execute(
+                    "INSERT INTO articlecount (result_id, count) VALUES (%s, %s)",
+                    (result_id, article_count)
+                )
 
                 # Extract categories from user search text and store in categories table
                 if search_id:  # Only extract categories if we have a search_id
@@ -836,7 +770,6 @@ def api_scrape():
                         )
                         cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, summary_text))
                         metrics = calculate_source_metrics(results, summary_text)
-                        persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
                         print("✅ AI summary stored successfully (API scrape)")
                     except Exception as summary_error:
                         print(f"❌ AI Summary Error (API scrape): {summary_error}")
@@ -849,7 +782,6 @@ def api_scrape():
                         )
                         cursor.execute(insert_summary_sql, (session['user_db_id'], result_id, fallback_summary))
                         metrics = calculate_source_metrics(results, fallback_summary)
-                        persist_credibility_score(cursor, session['user_db_id'], result_id, metrics)
 
                 db.commit()
 
@@ -1482,26 +1414,35 @@ def get_bot_response(result_id):
                 
                 if not data:
                     return jsonify({'status': 'error', 'message': 'Response not found'}), 404
+
+                # ✅ NEW: Get article count from articlecount table
+                cursor.execute("""
+                    SELECT count 
+                    FROM articlecount 
+                    WHERE result_id = %s
+                    ORDER BY count DESC
+                    LIMIT 1
+                """, (result_id,))
+                count_row = cursor.fetchone()
+                article_count = count_row['count'] if count_row else 0
                 
-                # Parse results JSON (contains all 5 scraped articles)
+                # Parse results JSON
                 results = parse_results_payload(data['results'])
                 metrics = calculate_source_metrics(results, data['summary_text'])
                 
-                # Extract top 5 sources with URLs and titles
+                # Extract sources
                 sources = []
                 for result in results[:5]:
                     url = result.get('url', '#')
-                    # Use verified field from scraper if available, otherwise check URL
                     is_trusted = result.get('verified', result.get('is_trusted', False))
                     if not is_trusted:
-                        # Fallback to URL check if verified field not present
                         is_trusted = any(domain in url for domain in TRUSTED_DOMAINS)
                     
                     sources.append({
                         'title': result.get('title') or url.split('/')[2] if url != '#' else 'Unknown Source',
                         'url': url,
                         'is_trusted': is_trusted,
-                        'verified': result.get('verified', is_trusted)  # Add verified field
+                        'verified': result.get('verified', is_trusted)
                     })
                 
                 return jsonify({
@@ -1521,7 +1462,8 @@ def get_bot_response(result_id):
                     },
                     'trusted_count': metrics['trusted_count'],
                     'total_count': metrics['total_count'],
-                    'coverage_count': metrics['coverage_count']
+                    'coverage_count': metrics['coverage_count'],
+                    'article_count': article_count  # ✅ This is the key addition
                 })
                 
     except Exception as e:

@@ -272,7 +272,17 @@ function buildRichBotMessage(data) {
 
   const sourcesForArchive = Array.isArray(data.sources) ? data.sources : [];
   botMsg._sourcesForArchive = sourcesForArchive;
-  
+
+  // ✅ Get article count from the correct location
+  const articleCount = data.article_count || 0;
+  const maxCount = 10; // Maximum expected count
+
+  // Calculate the donut chart fill (282.7 is the circumference of the circle)
+  const fillPercentage = (articleCount / maxCount) * 282.7;
+
+  console.log('📥 Article count:', articleCount);
+  console.log('📥 Fill percentage:', fillPercentage);
+
   botMsg.innerHTML = `
     <div class="accordion-item" open>
       <div class="accordion-header">
@@ -297,15 +307,15 @@ function buildRichBotMessage(data) {
             <svg width="80" height="80" viewBox="0 0 120 120" class="donut-chart">
               <circle cx="60" cy="60" r="45" fill="none" stroke="#e0e0e0" stroke-width="16"></circle>
               <circle cx="60" cy="60" r="45" fill="none" stroke="#4caf50" stroke-width="16" 
-                      stroke-dasharray="${(data.accuracy.article_count_N / 10) * 282.7}" 
+                      stroke-dasharray="${fillPercentage} 282.7" 
                       stroke-dashoffset="0" transform="rotate(-90 60 60)"></circle>
               <text x="60" y="65" text-anchor="middle" font-size="20" font-weight="bold" fill="currentColor">
-                ${data.accuracy.article_count_N}/10
+                ${articleCount}/${maxCount}
               </text>
             </svg>
             <div class="coverage-info">
-              <p class="coverage-line-1">${data.accuracy.article_count_N} verified sources found</p>
-              <p class="coverage-line-2">${data.accuracy.status_message || 'Source coverage analysis'}</p>
+              <p class="coverage-line-1">${articleCount} verified sources found</p>
+              <p class="coverage-line-2">${(data.accuracy && data.accuracy.status_message) ? data.accuracy.status_message : 'Source coverage analysis'}</p>
             </div>
           </div>
           <hr>
@@ -850,16 +860,14 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .then(response => response.json())
     .then(data => {
-      // Remove loading message
       if (loadingMsg && loadingMsg.parentNode) {
         loadingMsg.parentNode.removeChild(loadingMsg);
       }
-  
+
       if (data.status === 'success') {
         const botMsg = document.createElement("div");
         botMsg.className = "bot-message";
         
-        // Convert sources to format for sources panel with trust indicators
         const sourcesForPanel = data.sources.map((source) => {
           return {
             label: source.title,
@@ -868,10 +876,14 @@ document.addEventListener('DOMContentLoaded', function() {
             is_trusted: source.is_trusted
           };
         });
-        
-        // Update sources panel with scraped sources
+
         updateSourcesList(sourcesForPanel);
         botMsg._sourcesForArchive = sourcesForPanel;
+
+        // ✅ Get article count from the correct location
+        const articleCount = data.article_count || 0;
+        const maxCount = 10;
+        const fillPercentage = (articleCount / maxCount) * 282.7;
 
         botMsg.innerHTML = `
           <div class="accordion-item">
@@ -896,28 +908,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="donut-chart-wrapper">
                   <svg width="80" height="80" viewBox="0 0 120 120" class="donut-chart">
                     <circle cx="60" cy="60" r="45" fill="none" stroke="#e0e0e0" stroke-width="16"></circle>
-                    <circle cx="60" cy="60" r="45" fill="none" stroke="#4caf50" stroke-width="16" 
-                            stroke-dasharray="${(data.accuracy.article_count_N / 10) * 282.7}" 
+                    <circle cx="60" cy="60" r="45" fill="none" stroke="#4caf50" stroke-width="16"
+                            stroke-dasharray="${fillPercentage} 282.7"
                             stroke-dashoffset="0" transform="rotate(-90 60 60)"></circle>
                     <text x="60" y="65" text-anchor="middle" font-size="20" font-weight="bold" fill="currentColor">
-                      ${data.accuracy.article_count_N}/10
+                      ${articleCount}/${maxCount}
                     </text>
                   </svg>
                   <div class="coverage-info">
-                    <p class="coverage-line-1">${data.accuracy.article_count_N} verified sources found</p>
+                    <p class="coverage-line-1">${articleCount} verified sources found</p>
                     <p class="coverage-line-2">${data.accuracy.status_message || 'Source coverage analysis'}</p>
                   </div>
                 </div>
                 <hr>
-               
+              
               </div>
             </div>
           </div>
         `;
-      
+
         chatBox.appendChild(botMsg);
         chatBox.scrollTop = chatBox.scrollHeight;
-  
+
         // Wire up accordion toggle
         const toggleBtn = botMsg.querySelector(".accordion-toggle");
         const accordionItem = botMsg.querySelector(".accordion-item");
@@ -930,7 +942,7 @@ document.addEventListener('DOMContentLoaded', function() {
             toggleBtn.setAttribute('aria-expanded', 'true');
           }
         });
-  
+
         // Wire save button
         const saveBtn = botMsg.querySelector('.save-response-btn');
         if (saveBtn) {
@@ -942,13 +954,11 @@ document.addEventListener('DOMContentLoaded', function() {
             showNotification('Saved response to Archive', 'success');
           });
         }
-  
-        // Update chat response in database (for follow-up messages)
-        // Sources are now in the sources panel, so we only save the summary
+
         if (!isFirstMessage) {
           updateChatResponse(id, data.summary);
         }
-        
+
       } else {
         showNotification('Failed to generate response: ' + (data.message || 'Unknown error'), 'error');
         console.error('Backend error:', data);
@@ -959,8 +969,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (loadingMsg && loadingMsg.parentNode) {
         loadingMsg.parentNode.removeChild(loadingMsg);
       }
-      
-      // Show error message in chat
+
       const errorMsg = document.createElement('div');
       errorMsg.className = 'bot-message';
       errorMsg.innerHTML = `
