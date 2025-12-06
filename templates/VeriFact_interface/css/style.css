@@ -59,7 +59,6 @@
 [data-theme] .section-header,
 [data-theme] .accordion-item.open,
 [data-theme] .summary,
-[data-theme] .accuracy-card,
 [data-theme] .chat-input,
 [data-theme] .dropdown-menu,
 [data-theme] .bot-message .accordion-item.open {
@@ -74,7 +73,6 @@
 }
 
 [data-theme] .chat-input,
-[data-theme] .accuracy-card,
 [data-theme] .accordion-item,
 [data-theme] .summary,
 [data-theme] .dropdown-menu,
@@ -1540,65 +1538,6 @@ body {
 }
 
 
-/* Card Container */
-.accuracy-card {
-  padding: 10px;
-  border-radius: 30px;
-  border: 1px solid var(--border);
-  margin-top: 2em;
-  max-width: 600px;
-  margin: 10px auto 20px;
-
-}
-
-/*Accuracy Range*/
-.accuracy-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  top: 20%;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.accuracy-bar .bar {
-  flex: 1;
-  display: flex;
-  height: 14px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #ddd;
-}
-
-.accuracy-bar .bar .true {
-  background: #4caf50; /* green for true */
-  height: 100%;
-  gap: 5px;
-}
-
-.accuracy-bar .bar .false {
-  background: #e53935; /* red for false */
-  height: 100%;
-  gap: 5px;
-}
-
-.accuracy-bar .true-label {
-  color: #4caf50;
-}
-
-.accuracy-bar .false-label {
-  color: #e53935;
-}
-
-.fa-check-circle {
-  color: #4caf50; /* green color */
-  font-size: 20px; /* adjust size */
-  margin-right: 6px; /* spacing if used inline with text */
-  vertical-align: middle; /* aligns nicely with text */
-  transition: transform 0.2s ease, color 0.3s ease;
-}
-
 /* Response accordion content styles */
 .accordion-content .response-section {
   padding: 8px 0 12px 0;
@@ -1623,26 +1562,6 @@ body {
 }
 
 /* Range-bar inside accuracy card when used in responses */
-.accuracy-card .range-bar {
-  height: 12px;
-  border-radius: 8px;
-  overflow: hidden;
-  background: rgba(255,255,255,0.08);
-}
-.accuracy-card .range-bar .true {
-  background: linear-gradient(90deg, #4caf50, #66bb6a);
-}
-.accuracy-card .range-bar .false {
-  background: linear-gradient(90deg, #ef5350, #e53935);
-}
-
-/* Make accuracy card smaller inside accordion */
-.accordion-content .accuracy-card {
-  max-width: 100%;
-  margin: 10px 0;
-  border-radius: 12px;
-  padding: 8px;
-}
 
 .save-response-btn.saved { color: #ffd54f; }
 

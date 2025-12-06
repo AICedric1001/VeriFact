@@ -1,17 +1,13 @@
 // Hide section header and lift accuracy card at 300% and 400% zoom
 function handleSectionHeaderAndAccuracyCardZoom() {
   const sectionHeader = document.querySelector('.section-header');
-  const accuracyCard = document.querySelector('.accuracy-card');
   if (!sectionHeader) return;
   if (window.devicePixelRatio >= 4) {
     sectionHeader.style.display = 'none';
-    if (accuracyCard) accuracyCard.style.marginTop = '2px';
   } else if (window.devicePixelRatio >= 3) {
     sectionHeader.style.display = 'none';
-    if (accuracyCard) accuracyCard.style.marginTop = '10px';
   } else {
     sectionHeader.style.display = '';
-    if (accuracyCard) accuracyCard.style.marginTop = '';
   }
 }
 
