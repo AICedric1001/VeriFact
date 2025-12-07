@@ -620,6 +620,9 @@ const textarea = document.querySelector('.chat-input textarea');
       signOutBtn.addEventListener('click', function(e) {
         e.preventDefault();
         
+        // Set a flag to prevent auto-login attempts
+        sessionStorage.setItem('isLoggingOut', 'true');
+        
         // Call logout API
         fetch('/api/logout', {
           method: 'POST',
@@ -628,59 +631,58 @@ const textarea = document.querySelector('.chat-input textarea');
         }).then(function(res) {
           return res.json().then(function(json) { return { ok: res.ok, json: json }; });
         }).then(function(result) {
-          if (result.ok) {
-            // Clear chat manager state
-            if (window.chatManager) {
-              window.chatManager.conversations = {};
-              window.chatManager.currentConversationId = null;
-              window.chatManager.selectedConversations.clear();
-              window.chatManager.pendingMessage = null;
-            }
-            
-            // Clear chat UI
-            const chatBox = document.getElementById('chatBox');
-            if (chatBox) chatBox.innerHTML = '';
-            
-            // Show empty state
-            const emptyState = document.querySelector('.empty-state');
-            if (emptyState) emptyState.style.display = 'flex';
-            
-            // Reset chat input
-            const chatInput = document.getElementById('chatInput');
-            if (chatInput) {
-              chatInput.classList.remove('bottom');
-              chatInput.classList.add('centered');
-              const textarea = chatInput.querySelector('textarea');
-              if (textarea) textarea.value = '';
-            }
-            
-            // Clear sources
-            const sourcesList = document.getElementById('sourcesList');
-            if (sourcesList) {
-              sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
-            }
-            
-            // Clear sidebar
-            const chatHistory = document.querySelector('.chat-history');
-            if (chatHistory) {
-              chatHistory.innerHTML = '<div class="no-chats">No chat history</div>';
-            }
-            
-            // Reset username display
-            const userDisplayName = document.getElementById('userDisplayName');
-            if (userDisplayName) {
-              userDisplayName.textContent = 'Sign In';
-            }
-
-            if (typeof window.setArchiveUserContext === 'function') {
-              window.setArchiveUserContext(ARCHIVE_DEFAULT_USER);
-            }
-            
-            // Redirect to auth page after successful logout
-            window.location.href = '/auth';
-          } else {
-            alert('Logout failed. Please try again.');
+          // Clear chat manager state
+          if (window.chatManager) {
+            window.chatManager.conversations = {};
+            window.chatManager.currentConversationId = null;
+            window.chatManager.selectedConversations.clear();
+            window.chatManager.pendingMessage = null;
           }
+          
+          // Clear chat UI
+          const chatBox = document.getElementById('chatBox');
+          if (chatBox) chatBox.innerHTML = '';
+          
+          // Show empty state
+          const emptyState = document.querySelector('.empty-state');
+          if (emptyState) emptyState.style.display = 'flex';
+          
+          // Reset chat input
+          const chatInput = document.getElementById('chatInput');
+          if (chatInput) {
+            chatInput.classList.remove('bottom');
+            chatInput.classList.add('centered');
+            const textarea = chatInput.querySelector('textarea');
+            if (textarea) textarea.value = '';
+          }
+          
+          // Clear sources
+          const sourcesList = document.getElementById('sourcesList');
+          if (sourcesList) {
+            sourcesList.innerHTML = '<li class="placeholder">No sources yet.</li>';
+          }
+          
+          // Clear sidebar
+          const chatHistory = document.querySelector('.chat-history');
+          if (chatHistory) {
+            chatHistory.innerHTML = '<div class="no-chats">No chat history</div>';
+          }
+          
+          // Reset username display
+          const userDisplayName = document.getElementById('userDisplayName');
+          if (userDisplayName) {
+            userDisplayName.textContent = 'Sign In';
+          }
+
+          if (typeof window.setArchiveUserContext === 'function') {
+            window.setArchiveUserContext(ARCHIVE_DEFAULT_USER);
+          }
+          
+          // Clear the logout flag and redirect to auth page
+          setTimeout(function() {
+            sessionStorage.removeItem('isLoggingOut');
+            window.location.href = '/auth';
+          }, 100);
         }).catch(function(err) {
           console.error('Logout error:', err);
           
@@ -694,13 +696,16 @@ const textarea = document.querySelector('.chat-input textarea');
           }
           
           // Still redirect even if API call fails
-          window.location.href = '/auth';
+          setTimeout(function() {
+            sessionStorage.removeItem('isLoggingOut');
+            window.location.href = '/auth';
+          }, 100);
         });
       });
     }
   });
 
-  
+    
   // Helper function to escape HTML and prevent XSS
   function escapeHtml(text) {
     if (!text) return '';

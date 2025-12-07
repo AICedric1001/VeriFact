@@ -551,6 +551,12 @@ function loadChatHistory() {
 
 // Load user information and chat history when page loads
 document.addEventListener('DOMContentLoaded', function() {
+  // Check if we're in the process of logging out
+  if (sessionStorage.getItem('isLoggingOut') === 'true') {
+    console.log('User is logging out, skipping user info load');
+    return;
+  }
+  
   loadUserInfo();
   loadChatHistory();
   loadTrendingTopics();
@@ -558,12 +564,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Load current user information
 function loadUserInfo() {
+  // Don't attempt to load user info if logout is in progress
+  if (sessionStorage.getItem('isLoggingOut') === 'true') {
+    return;
+  }
+  
   fetch('/api/user', {
     method: 'GET',
     credentials: 'same-origin'
   })
   .then(response => response.json())
   .then(data => {
+    // Check again if logout was initiated while the request was in flight
+    if (sessionStorage.getItem('isLoggingOut') === 'true') {
+      console.log('Logout initiated, ignoring user info response');
+      return;
+    }
+    
     if (data.status === 'success' && data.user) {
       // Update the username display
       const userDisplayName = document.getElementById('userDisplayName');
@@ -586,6 +603,12 @@ function loadUserInfo() {
     }
   })
   .catch(error => {
+    // Check if logout was initiated
+    if (sessionStorage.getItem('isLoggingOut') === 'true') {
+      console.log('Logout initiated, ignoring error');
+      return;
+    }
+    
     console.error('Error loading user info:', error);
     // Keep "Sign In" as default on error
     if (typeof window.setArchiveUserContext === 'function') {

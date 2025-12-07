@@ -1035,6 +1035,16 @@ body {
   background: rgba(255,255,255,0.12);
 }
 
+/* Sign out button styling */
+.dropdown-menu #signOutBtn {
+  color: #e34234;
+}
+
+.dropdown-menu #signOutBtn:hover {
+  background: rgba(227,66,52,0.15);
+  color: #ff6b6b;
+}
+
 .dropdown.open .dropdown-menu {
   display: block !important; /* render as normal block menu */
   visibility: visible !important;

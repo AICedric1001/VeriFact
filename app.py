@@ -338,8 +338,8 @@ def get_db_connection():
     return psycopg2.connect(
         host="127.0.0.1",
         user="postgres",
-        password="lenroy3221",  #Change this to your own password Corl4453
-        database="newVeriFactDB",
+        password="Corl4453",  #Change this to your own password Corl4453
+        database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
 
@@ -922,6 +922,8 @@ def get_current_user():
 def api_logout():
     session.pop('user_id', None)
     session.pop('user_db_id', None)
+    session.modified = True  # Force session to be cleared on client
+    session.clear()  # Clear all session data
     return jsonify({'status': 'success'})
 
 # -------- AI Summary Endpoints --------
