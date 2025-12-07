@@ -9,7 +9,7 @@ def get_db_connection():
         conn = psycopg2.connect(
             host="127.0.0.1",  # Force IPv4
             user="postgres",
-            password="lenroy3221",
+            password="Corl4453",
             database="websearch_demo",
             cursor_factory=psycopg2.extras.RealDictCursor
         )
@@ -513,7 +513,7 @@ class AdminDB:
             conn = psycopg2.connect(
                 host="localhost",
                 user="postgres",
-                password="123",
+                password="Corl4453",
                 database="websearch_demo",
                 cursor_factory=psycopg2.extras.RealDictCursor
             )
@@ -870,3 +870,112 @@ class AdminDB:
         except Exception as e:
             print(f"Error getting daily activity: {e}")
             return []
+
+    # -------- Trusted Sources Management --------
+    @staticmethod
+    @with_db_connection
+    def get_trusted_sources(cursor, status='all'):
+        """Get trusted/blocked sources with optional status filter"""
+        try:
+            if status == 'all':
+                cursor.execute("""
+                    SELECT source_id, domain, source_name, trust_status, reason, added_date
+                    FROM trusted_sources
+                    ORDER BY added_date DESC
+                """)
+            else:
+                cursor.execute("""
+                    SELECT source_id, domain, source_name, trust_status, reason, added_date
+                    FROM trusted_sources
+                    WHERE trust_status = %s
+                    ORDER BY added_date DESC
+                """, (status,))
+            return cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting trusted sources: {e}")
+            return []
+
+    @staticmethod
+    @with_db_connection
+    def add_trusted_source(cursor, domain, source_name=None, trust_status='neutral', reason=None):
+        """Add a new trusted source"""
+        try:
+            cursor.execute("""
+                INSERT INTO trusted_sources (domain, source_name, trust_status, reason)
+                VALUES (%s, %s, %s, %s)
+                RETURNING source_id
+            """, (domain, source_name, trust_status, reason))
+            
+            result = cursor.fetchone()
+            return result['source_id'] if result else None
+        except psycopg2.IntegrityError:
+            # Domain already exists (UNIQUE constraint)
+            return None
+        except Exception as e:
+            print(f"Error adding trusted source: {e}")
+            return None
+
+    @staticmethod
+    @with_db_connection
+    def delete_trusted_source(cursor, source_id):
+        """Delete a trusted source"""
+        try:
+            cursor.execute("""
+                DELETE FROM trusted_sources
+                WHERE source_id = %s
+            """, (source_id,))
+            
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error deleting trusted source: {e}")
+            return False
+
+    @staticmethod
+    @with_db_connection
+    def update_trusted_source(cursor, source_id, domain=None, source_name=None, 
+                            trust_status=None, reason=None):
+        """Update a trusted source"""
+        try:
+            updates = []
+            params = []
+            
+            if domain is not None:
+                updates.append("domain = %s")
+                params.append(domain)
+            if source_name is not None:
+                updates.append("source_name = %s")
+                params.append(source_name)
+            if trust_status is not None:
+                updates.append("trust_status = %s")
+                params.append(trust_status)
+            if reason is not None:
+                updates.append("reason = %s")
+                params.append(reason)
+            
+            if not updates:
+                return False
+            
+            params.append(source_id)
+            update_sql = f"UPDATE trusted_sources SET {', '.join(updates)} WHERE source_id = %s"
+            
+            cursor.execute(update_sql, params)
+            return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error updating trusted source: {e}")
+            return False
+
+    @staticmethod
+    @with_db_connection
+    def get_source_by_domain(cursor, domain):
+        """Get source info by domain"""
+        try:
+            cursor.execute("""
+                SELECT source_id, domain, source_name, trust_status, reason, added_date
+                FROM trusted_sources
+                WHERE domain = %s
+            """, (domain,))
+            return cursor.fetchone()
+        except Exception as e:
+            print(f"Error getting source by domain: {e}")
+            return None
+

@@ -554,3 +554,80 @@ def get_analytics_categories():
             'success': False,
             'error': str(e)
         }), 500
+
+# -------- Source Management Routes --------
+@admin_bp.route('/sources')
+@login_required
+def sources():
+    """Display sources management page"""
+    try:
+        # Get filter status from query parameter
+        trust_status = request.args.get('status', 'all')
+        
+        # Get sources from database
+        sources = AdminDB.get_trusted_sources(status=trust_status)
+        
+        return render_template('VeriFact_interface/admin/sources.html', 
+                             sources=sources,
+                             trust_status=trust_status)
+    except Exception as e:
+        print(f"Error loading sources: {e}")
+        traceback.print_exc()
+        flash('Error loading sources', 'error')
+        return redirect(url_for('admin.dashboard'))
+
+@admin_bp.route('/api/sources/add', methods=['POST'])
+@login_required
+def add_source():
+    """API endpoint to add a new trusted source"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        domain = (data.get('domain') or '').strip().lower()
+        trust_status = (data.get('trust_status') or '').strip().lower()
+        
+        if not domain:
+            return jsonify({'success': False, 'message': 'Domain is required'}), 400
+        
+        if trust_status not in ['trusted', 'blocked', 'neutral']:
+            return jsonify({'success': False, 'message': 'Invalid trust status'}), 400
+        
+        # Optional fields
+        source_name = (data.get('source_name') or '').strip() or None
+        reason = (data.get('reason') or '').strip() or None
+        
+        # Add source to database
+        result = AdminDB.add_trusted_source(
+            domain=domain,
+            source_name=source_name,
+            trust_status=trust_status,
+            reason=reason
+        )
+        
+        if result:
+            return jsonify({'success': True, 'message': 'Source added successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Domain already exists'}), 409
+    
+    except Exception as e:
+        print(f"Error adding source: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@admin_bp.route('/api/sources/delete/<int:source_id>', methods=['DELETE'])
+@login_required
+def delete_source(source_id):
+    """API endpoint to delete a trusted source"""
+    try:
+        result = AdminDB.delete_trusted_source(source_id)
+        
+        if result:
+            return jsonify({'success': True, 'message': 'Source deleted successfully'})
+        else:
+            return jsonify({'success': False, 'message': 'Source not found'}), 404
+    
+    except Exception as e:
+        print(f"Error deleting source: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500

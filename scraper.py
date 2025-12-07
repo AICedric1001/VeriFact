@@ -26,7 +26,7 @@ def search_serpapi(query, api_key=None, site_filter=None):
         api_key
         or os.getenv("SERPAPI_API_KEY")
         or os.getenv("SERPAPI_KEY")
-        or "b78924b4496d3e2abba8b33f9e89fa5eb443f8e5ba0db605c98b5b6bae37e50c"
+        or "e31eb0dbf79fdacef58132c6db8d929f98e1bbef3efe957b01853e2948b68083"
     )
     if not effective_key:
         raise ValueError("SERPAPI_API_KEY not provided. Set env var or pass api_key.")
