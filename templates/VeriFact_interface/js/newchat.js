@@ -220,123 +220,132 @@ class ChatManager {
     this.renderChatHistory();
   }
 
-  // Build bot message with full UI (summary, sources, accuracy)
-  buildBotMessage(messageData) {
-    const botMsg = document.createElement('div');
-    botMsg.className = 'bot-message';
+// Build bot message with full UI (summary, sources, accuracy)
+buildBotMessage(messageData) {
+  const botMsg = document.createElement('div');
+  botMsg.className = 'bot-message';
 
-    // Determine if this is a rich message (has summary + sources) or simple follow-up
-    const isRichMessage = messageData.summary && messageData.sources;
+  // Determine if this is a rich message (has summary + sources) or simple follow-up
+  const isRichMessage = messageData.summary && messageData.sources;
 
-    if (isRichMessage) {
-      // Rich message with accordion, summary, accuracy, sources
-      botMsg.innerHTML = `
-        <div class="accordion-item">
-          <div class="accordion-header">
-            <div class="url-row">
-              <strong>Response</strong>
-              <span class="response-title">${escapeHtml(messageData.summary.substring(0, 50) + '...')}</span>
-            </div>
-            <div class="card-right">
-              <button class="icon-btn save-response-btn" type="button" title="Save response">
-                <i class="fa fa-save"></i>
-              </button>
-            </div>
-            <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+  if (isRichMessage) {
+    // ✅ FIX: Get article_count from the correct location
+    const articleCount = messageData.article_count || messageData.coverage_count || (messageData.accuracy ? messageData.accuracy.true_count : 0) || 0;
+    const maxCount = 10;
+    const fillPercentage = (articleCount / maxCount) * 282.7;
+    
+    console.log('🔍 newchat.js buildBotMessage - articleCount:', articleCount);
+    console.log('🔍 messageData:', messageData);
+
+    // Rich message with accordion, summary, accuracy, sources
+    botMsg.innerHTML = `
+      <div class="accordion-item">
+        <div class="accordion-header">
+          <div class="url-row">
+            <strong>Response</strong>
+            <span class="response-title">${escapeHtml(messageData.summary.substring(0, 50) + '...')}</span>
           </div>
-          <div class="accordion-content">
-            <div class="response-section">
-              <strong>Summary:</strong>
-              <p class="resp-summary">${escapeHtml(messageData.summary)}</p>
-              <hr>
-              <strong>Source Coverage</strong>
-              <div class="donut-chart-container">
-                <svg width="120" height="120" viewBox="0 0 120 120" class="donut-chart">
-                  <circle cx="60" cy="60" r="45" fill="none" stroke="#e0e0e0" stroke-width="16"></circle>
-                  <circle cx="60" cy="60" r="45" fill="none" stroke="#4caf50" stroke-width="16" 
-                          stroke-dasharray="${(messageData.accuracy.article_count_N / 10) * 282.7}" 
-                          stroke-dashoffset="0" transform="rotate(-90 60 60)"></circle>
-                  <text x="60" y="65" text-anchor="middle" font-size="20" font-weight="bold" fill="currentColor">
-                    ${messageData.accuracy.article_count_N}/10
-                  </text>
-                </svg>
+          <div class="card-right">
+            <button class="icon-btn save-response-btn" type="button" title="Save response">
+              <i class="fa fa-save"></i>
+            </button>
+          </div>
+          <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+        </div>
+        <div class="accordion-content">
+          <div class="response-section">
+            <strong>Summary:</strong>
+            <p class="resp-summary">${escapeHtml(messageData.summary)}</p>
+            <hr>
+            <strong>Source Coverage</strong>
+            <div class="donut-chart-wrapper">
+              <svg width="80" height="80" viewBox="0 0 120 120" class="donut-chart">
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#e0e0e0" stroke-width="16"></circle>
+                <circle cx="60" cy="60" r="45" fill="none" stroke="#4caf50" stroke-width="16" 
+                        stroke-dasharray="${fillPercentage} 282.7" 
+                        stroke-dashoffset="0" transform="rotate(-90 60 60)"></circle>
+                <text x="60" y="65" text-anchor="middle" font-size="20" font-weight="bold" fill="currentColor">
+                  ${articleCount}/${maxCount}
+                </text>
+              </svg>
+              <div class="coverage-info">
+                <p class="coverage-line-1">${articleCount} verified source${articleCount !== 1 ? 's' : ''} found</p>
+                <p class="coverage-line-2">${(messageData.accuracy && messageData.accuracy.status_message) || 'Source coverage analysis'}</p>
               </div>
-              <p class="source-coverage-text">${messageData.accuracy.status_message || 'Source coverage based on article count'}</p>
-              <hr>
-             
             </div>
+            <hr>
           </div>
         </div>
-      `;
+      </div>
+    `;
 
-      const sourcesForArchive = Array.isArray(messageData.sources) ? messageData.sources : [];
-      botMsg._sourcesForArchive = sourcesForArchive;
+    const sourcesForArchive = Array.isArray(messageData.sources) ? messageData.sources : [];
+    botMsg._sourcesForArchive = sourcesForArchive;
 
-      // Wire up accordion toggle
-      const toggleBtn = botMsg.querySelector('.accordion-toggle');
-      const accordionItem = botMsg.querySelector('.accordion-item');
-      if (toggleBtn && accordionItem) {
-        toggleBtn.addEventListener('click', () => {
-          if (accordionItem.classList.contains('open')) {
-            closeAccordion(accordionItem);
-            toggleBtn.setAttribute('aria-expanded', 'false');
-          } else {
-            openAccordion(accordionItem);
-            toggleBtn.setAttribute('aria-expanded', 'true');
-          }
-        });
-      }
-
-      // Wire up save button
-      const saveBtn = botMsg.querySelector('.save-response-btn');
-      if (saveBtn) {
-        saveBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (typeof saveResponseToArchive === 'function') {
-            saveResponseToArchive(botMsg, sourcesForArchive);
-          }
-          saveBtn.classList.add('saved');
-          saveBtn.title = 'Saved';
-          if (typeof showNotification === 'function') {
-            showNotification('Saved response to Archive', 'success');
-          }
-        });
-      }
-    } else {
-      // Simple follow-up message (no sources/accuracy)
-      botMsg.innerHTML = `
-        <div class="accordion-item">
-          <div class="accordion-header">
-            <div class="url-row">
-              <strong>Response</strong>
-            </div>
-            <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
-          </div>
-          <div class="accordion-content">
-            <p>${escapeHtml(messageData.content)}</p>
-          </div>
-        </div>
-      `;
-
-      // Wire up accordion for simple messages too
-      const toggleBtn = botMsg.querySelector('.accordion-toggle');
-      const accordionItem = botMsg.querySelector('.accordion-item');
-      if (toggleBtn && accordionItem) {
-        toggleBtn.addEventListener('click', () => {
-          if (accordionItem.classList.contains('open')) {
-            closeAccordion(accordionItem);
-            toggleBtn.setAttribute('aria-expanded', 'false');
-          } else {
-            openAccordion(accordionItem);
-            toggleBtn.setAttribute('aria-expanded', 'true');
-          }
-        });
-      }
+    // Wire up accordion toggle
+    const toggleBtn = botMsg.querySelector('.accordion-toggle');
+    const accordionItem = botMsg.querySelector('.accordion-item');
+    if (toggleBtn && accordionItem) {
+      toggleBtn.addEventListener('click', () => {
+        if (accordionItem.classList.contains('open')) {
+          closeAccordion(accordionItem);
+          toggleBtn.setAttribute('aria-expanded', 'false');
+        } else {
+          openAccordion(accordionItem);
+          toggleBtn.setAttribute('aria-expanded', 'true');
+        }
+      });
     }
 
-    return botMsg;
+    // Wire up save button
+    const saveBtn = botMsg.querySelector('.save-response-btn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (typeof saveResponseToArchive === 'function') {
+          saveResponseToArchive(botMsg, sourcesForArchive);
+        }
+        saveBtn.classList.add('saved');
+        saveBtn.title = 'Saved';
+        if (typeof showNotification === 'function') {
+          showNotification('Saved response to Archive', 'success');
+        }
+      });
+    }
+  } else {
+    // Simple follow-up message (no sources/accuracy)
+    botMsg.innerHTML = `
+      <div class="accordion-item">
+        <div class="accordion-header">
+          <div class="url-row">
+            <strong>Response</strong>
+          </div>
+          <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
+        </div>
+        <div class="accordion-content">
+          <p>${escapeHtml(messageData.content)}</p>
+        </div>
+      </div>
+    `;
+
+    // Wire up accordion for simple messages too
+    const toggleBtn = botMsg.querySelector('.accordion-toggle');
+    const accordionItem = botMsg.querySelector('.accordion-item');
+    if (toggleBtn && accordionItem) {
+      toggleBtn.addEventListener('click', () => {
+        if (accordionItem.classList.contains('open')) {
+          closeAccordion(accordionItem);
+          toggleBtn.setAttribute('aria-expanded', 'false');
+        } else {
+          openAccordion(accordionItem);
+          toggleBtn.setAttribute('aria-expanded', 'true');
+        }
+      });
+    }
   }
 
+  return botMsg;
+}
   // Render chat history in sidebar
   renderChatHistory() {
     const historyContainer = document.querySelector('.chat-history');

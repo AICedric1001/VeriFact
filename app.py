@@ -338,7 +338,7 @@ def get_db_connection():
     return psycopg2.connect(
         host="127.0.0.1",
         user="postgres",
-        password="radgelwashere4453",  #Change this to your own password Corl4453
+        password="lenroy3221",  #Change this to your own password Corl4453
         database="newVeriFactDB",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
@@ -1213,10 +1213,24 @@ def get_chat_history():
                 # Process searches (start of conversations)
                 for search in searches:
                     search_id = search['search_id']
+                    result_id = search['result_id']
                     
                     # Parse search results JSON
                     results = parse_results_payload(search.get('search_results_json'))
                     metrics = calculate_source_metrics(results, search.get('summary_text'))
+                    
+                    # Get article count
+                    article_count = 0
+                    if result_id:
+                        cursor.execute("""
+                            SELECT count 
+                            FROM articlecount 
+                            WHERE result_id = %s
+                            ORDER BY count DESC
+                            LIMIT 1
+                        """, (result_id,))
+                        count_row = cursor.fetchone()
+                        article_count = count_row['count'] if count_row else 0
                     
                     # Extract sources with trust indicators
                     sources = []
@@ -1232,14 +1246,14 @@ def get_chat_history():
                             'title': result.get('title', 'Untitled'),
                             'url': url,
                             'is_trusted': is_trusted,
-                            'verified': result.get('verified', is_trusted)  # Add verified field
+                            'verified': result.get('verified', is_trusted)
                         })
                     
                     conversations[search_id] = {
                         'search_id': search_id,
                         'title': search['query_text'][:60] + ('...' if len(search['query_text']) > 60 else ''),
                         'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None,
-                        'search_query': search['query_text'],  # Store for duplicate detection
+                        'search_query': search['query_text'],
                         'messages': [
                             {
                                 'role': 'user',
@@ -1265,6 +1279,7 @@ def get_chat_history():
                                     'coverage_count': metrics['coverage_count']
                                 },
                                 'result_id': search['result_id'],
+                                'article_count': article_count,
                                 'timestamp': search['timestamp'].isoformat() if search['timestamp'] else None
                             }
                         ]
@@ -1276,10 +1291,9 @@ def get_chat_history():
                     if not search_id or search_id not in conversations:
                         continue
                     
-                    # Skip chat messages that match the search query text (to avoid duplicating the initial message)
+                    # Skip chat messages that match the search query text
                     search_query = conversations[search_id].get('search_query', '')
                     if chat['query_text'].strip().lower() == search_query.strip().lower():
-                        # This is the initial search message, already represented by the search
                         continue
                     
                     messages_to_add = [

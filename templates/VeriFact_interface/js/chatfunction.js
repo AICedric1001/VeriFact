@@ -1098,17 +1098,24 @@ function buildRichBotMessage(data) {
   return botMsg;
 }
 
-// Update the chatManager buildBotMessage to use consistent logic
+// Update buildBotMessageForHistory function (around line 520-600)
 function buildBotMessageForHistory(messageData) {
+   // 🐛 DEBUG: Log the entire messageData to see its structure
+  console.log('🐛 buildBotMessageForHistory received:', messageData);
+  console.log('🐛 article_count:', messageData.article_count);
+  console.log('🐛 coverage_count:', messageData.coverage_count);
+  console.log('🐛 accuracy:', messageData.accuracy);
+
   const botMsg = document.createElement('div');
   botMsg.className = 'bot-message';
 
   // Determine if this is a rich message (has summary + sources) or simple follow-up
-  const isRichMessage = messageData.summary && messageData.sources;
+ const isRichMessage = messageData.summary && messageData.sources;
 
   if (isRichMessage) {
-    // Get article count from accuracy data with proper fallback
-    const articleCount = messageData.accuracy?.article_count || messageData.accuracy?.true_count || 0;
+    // ✅ FIX: Get article count from the correct location - top level, not inside accuracy
+    const articleCount = messageData.article_count || messageData.coverage_count || (messageData.accuracy ? messageData.accuracy.true_count : 0) || 0;
+    console.log('🐛 Final articleCount:', articleCount);
     const donutChartHtml = buildDonutChart(messageData.accuracy || {}, articleCount);
 
     // Rich message with accordion, summary, accuracy, sources
