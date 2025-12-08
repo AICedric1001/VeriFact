@@ -338,8 +338,8 @@ def get_db_connection():
     return psycopg2.connect(
         host="127.0.0.1",
         user="postgres",
-        password="Corl4453",  #Change this to your own password Corl4453
-        database="websearch_demo",
+        password="radgelwashere4453",  #Change this to your own password Corl4453
+        database="newVeriFactDB",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
 

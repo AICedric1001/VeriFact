@@ -1,93 +1,73 @@
-from scraper import search_serpapi, extract_article_text
+from scraper import main_system, extract_article_text
 from gemini import summarize_with_gemini, respond_with_gemini
 from trusted_sources import FILTERED_DOMAINS
 
 def generate_summary_from_text(post_text, serpapi_key=None):
     print(f"📨 Running summary on: {post_text}")
 
-    links = search_serpapi(post_text, serpapi_key)
-    HARMFUL_DOMAIN_BLOCKLIST = ['malicious-site.com', 'illegal-forum.net', 'extreme-content.org']
+    # Use main_system() instead - it returns full article data
+    articles = main_system(post_text, api_key=serpapi_key)
+    print(f"🔗 Found {len(articles)} verified articles")
     
-    # Normalize to a list of URL strings in case search_serpapi returns dicts
-    urls = []
-    for item in links or []:
-        if isinstance(item, dict):
-            url = item.get('url')
-            if url:
-                urls.append(url)
-        elif isinstance(item, str):
-            urls.append(item)
-        
-    safe_urls = []
-    for url in urls:
-        is_blocked = False
-        for blocked_domain in HARMFUL_DOMAIN_BLOCKLIST:
-            if blocked_domain in url:
-                print(f"🚫 Blocked URL due to domain blocklist: {url}")
-                is_blocked = True
-                break
-        if not is_blocked:
-            safe_urls.append(url)
-
-    trusted_links = [url for url in urls if any(domain in url for domain in FILTERED_DOMAINS)]
-    unverified_links = [url for url in urls if url not in trusted_links]
-
-    # Limit to top 5
-    trusted_links = trusted_links[:5]
-    unverified_links = unverified_links[:5]
-
-    def build_combined_text(url_list):
-        combined = ""
-        for link in url_list:
-            try:
-                article = extract_article_text(link)
-            except Exception:
-                article = None
-            if article:
-                combined += f"\n\n[Source: {link}]\n{article}"
-        return combined.strip()
-
-    # Handle case where no links found at all
-    if not trusted_links and not unverified_links:
+    if not articles:
         summary = "❌ No available sources found at this time. Please try refining your search query or check back later."
         return {
             "summary": summary,
             "trusted_sources": [],
-            "unverified_sources": []
+            "show_sources": False,
+            "show_chart": False,
         }
 
-    if trusted_links:
-        combined_text = build_combined_text(trusted_links)
-        if not combined_text:
-            summary = "⚠️ Could not extract text from trusted sources."
-        else:
-            # Enhanced prompt with relevance checking
-            summary = check_relevance_and_summarize(post_text, combined_text)
-    elif unverified_links:
-        combined_text = build_combined_text(unverified_links)
-        if not combined_text:
-            summary = "⚠️ No readable content from unverified links."
-        else:
-            # Enhanced prompt with relevance checking
-            relevance_summary = check_relevance_and_summarize(post_text, combined_text)
-            summary = "Summarized from verified sources:\n\n" + relevance_summary
-    else:
-        summary = "❌ No available sources found at this time. Please try refining your search query or check back later."
+    # Extract URLs and combine content
+    trusted_links = [article["url"] for article in articles]
+    
+    def build_combined_text(article_list):
+        combined = ""
+        for article in article_list:
+            combined += f"\n\n[Source: {article['url']}]\n{article['content']}"
+        return combined.strip()
+
+    combined_text = build_combined_text(articles)
+    print(f"📄 Combined text length: {len(combined_text)} characters")
+    
+    if not combined_text or len(combined_text.strip()) < 100:
+        summary = "⚠️ Could not extract sufficient text from trusted sources."
+        return {
+            "summary": summary,
+            "trusted_sources": [],
+            "show_sources": False,
+            "show_chart": False,
+        }
+    
+    summary = check_relevance_and_summarize(post_text, combined_text, source_urls=trusted_links)
 
     return {
         "summary": summary,
         "trusted_sources": trusted_links,
-        "unverified_sources": unverified_links
+        "article_count": len(articles),
+        "coverage_count": len(articles),
+        "show_sources": True,
+        "show_chart": True,
     }
 
 
-def check_relevance_and_summarize(query, combined_text):
+def check_relevance_and_summarize(query, combined_text, source_urls=None):
     """
     Check if the sources are relevant to the query before summarizing.
-    Returns appropriate message if irrelevant or no sources.
+    
+    Args:
+        query: User's search query
+        combined_text: Combined text from all sources
+        source_urls: List of source URLs that contributed to combined_text
     """
     if not combined_text or len(combined_text.strip()) < 100:
         return "❌ No available sources found at this time. Please try a different search query."
+    
+    # Validate sources are from trusted domains
+    if source_urls:
+        invalid_sources = [url for url in source_urls if not any(domain in url for domain in FILTERED_DOMAINS)]
+        if invalid_sources:
+            print(f"⚠️ Warning: Found untrusted sources in combined text: {invalid_sources}")
     
     # Extract key intent from query (looking for specific claims)
     query_lower = query.lower()
@@ -157,7 +137,8 @@ def generate_followup_reply(followup_prompt, context_summary=None, sources=None,
         "If the answer cannot be derived from the context, clearly state the limitation and suggest the user rerun a fresh search.\n\n"
         f"Context:\n{context_text}\n\n"
         f"User follow-up prompt:\n{followup_prompt}\n\n"
-        "Respond in a concise paragraph (max 180 words), referencing any relevant sources by name when possible."
+        "Respond in a SINGLE concise paragraph (max 180 words), with no line breaks or bullet points. "
+        "Reference any relevant sources by name when possible. Do not use numbered lists or subheadings."
     )
 
     return respond_with_gemini(prompt)

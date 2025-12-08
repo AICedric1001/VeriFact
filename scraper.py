@@ -25,8 +25,6 @@ def search_serpapi(query, api_key=None, site_filter=None):
     effective_key = (
         api_key
         or os.getenv("SERPAPI_API_KEY")
-        or os.getenv("SERPAPI_KEY")
-        or "e31eb0dbf79fdacef58132c6db8d929f98e1bbef3efe957b01853e2948b68083"
     )
     if not effective_key:
         raise ValueError("SERPAPI_API_KEY not provided. Set env var or pass api_key.")
@@ -90,6 +88,7 @@ def extract_article_text(url):
         article.download()
         article.parse()
         text = (article.text or '').strip()
+        
         if not text:
             print(f"  ⚠️  No extractable text: {url}")
             return None
@@ -97,7 +96,33 @@ def extract_article_text(url):
         return text
     except Exception as e:
         print(f"  ❌ Extract failed: {url} :: {e}")
+        import traceback
+        traceback.print_exc()
         return None
+
+
+def build_combined_text(url_list):
+    combined = ""
+    successful_extractions = 0
+    for i, link in enumerate(url_list, 1):
+        print(f"   [{i}/{len(url_list)}] Extracting from: {link}")
+        try:
+            article_text = extract_article_text(link)
+            print(f"       📊 Extracted article type: {type(article_text)}, length: {len(str(article_text)) if article_text else 0}")
+            
+            if article_text and len(str(article_text).strip()) > 50:
+                combined += f"\n\n[Source: {link}]\n{article_text}"
+                successful_extractions += 1
+                print(f"       ✅ Extracted {len(article_text)} characters")
+            else:
+                print(f"       ⚠️ Article too short, empty, or None: {article_text}")
+        except Exception as e:
+            print(f"       ❌ Failed to extract: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    print(f"✅ Successfully extracted from {successful_extractions}/{len(url_list)} sources")
+    return combined.strip()
 
 # --- NLP Entity Extraction ---
 def analyze_text(text):

@@ -37,7 +37,7 @@ safety_config = [
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Correct model instantiation
-model = genai.GenerativeModel("models/gemini-2.0-flash", safety_settings=safety_config)
+model = genai.GenerativeModel("models/gemini-flash-latest", safety_settings=safety_config)
 
 
 def summarize_with_gemini(text_or_prompt):
