@@ -738,6 +738,51 @@ body {
   cursor: pointer; 
 }
 
+/* Base accordion header */
+.accordion-header {
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+/* ✅ GREEN - Claim is confirmed/true */
+.accordion-header--true {
+  background-color: #e8f5e9;
+  border-bottom: 2px solid #4caf50;
+  border-left: 4px solid #4caf50;
+}
+
+.accordion-header--true:hover {
+  background-color: #c8e6c9;
+}
+
+/* ❌ RED - Claim is not confirmed/false */
+.accordion-header--false {
+  background-color: #ffebee;
+  border-bottom: 2px solid #f44336;
+  border-left: 4px solid #f44336;
+}
+
+.accordion-header--false:hover {
+  background-color: #ffcdd2;
+}
+
+/* ⚠️ YELLOW/ORANGE - Neutral/unclear */
+.accordion-header--neutral {
+  background-color: #fff3e0;
+  border-bottom: 2px solid #ff9800;
+  border-left: 4px solid #ff9800;
+}
+
+.accordion-header--neutral:hover {
+  background-color: #ffe0b2;
+}
+
 .accordion-header:hover { 
   background: rgba(255,255,255,0.05); 
 }
@@ -807,6 +852,43 @@ body {
   overflow: visible; /* let content flow and allow page scroll instead */
 }
 
+/* Enhanced styling with text colors */
+.accordion-header--true .url-row {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.accordion-header--true::before {
+  content: '✓';
+  color: #4caf50;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.accordion-header--false .url-row {
+  color: #c62828;
+  font-weight: 600;
+}
+
+.accordion-header--false::before {
+  content: '✕';
+  color: #f44336;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.accordion-header--neutral .url-row {
+  color: #e65100;
+  font-weight: 600;
+}
+
+.accordion-header--neutral::before {
+  content: '⚠';
+  color: #ff9800;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
 /* =========================
    Custom Checkbox
 ========================= */
@@ -814,31 +896,6 @@ body {
   display: inline-flex; 
   align-items: center; 
   justify-content: center; 
-}
-
-.checkbox input { 
-  display: none; 
-}
-
-.checkbox span { 
-  width: 18px; 
-  height: 18px; 
-  border-radius: 4px; 
-  border: 2px solid rgba(255,255,255,0.85); 
-  display: inline-block; 
-  position: relative; 
-  background: transparent; 
-}
-
-/* =========================
-   Custom Checkbox
-========================= */
-.checkbox { 
-  display: inline-flex; 
-  align-items: center; 
-  justify-content: center; 
-  cursor: pointer;
-  margin-left: 8px;
 }
 
 .checkbox input { 
@@ -1445,16 +1502,8 @@ body {
   padding: 15px;
   width: 100%;
   outline: none;
-  resize: none;         /* prevent manual resizing */
-  overflow: auto;     /* add scrollbar if text is long */
-  max-height: 120px;    /* keep it neat */
-  line-height: 1.4em;
-  scrollbar-width: thin;
-  scrollbar-color: #6c757d transparent;
-  
 }
 
-/* Buttons */
 .chat-input button {
   border: none;
   border-radius: 50%;
@@ -2073,12 +2122,6 @@ body {
   display: flex;
   align-items: center;
   margin-right: 8px;
-}
-
-#archiveModal .archive-select {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
 }
 
 .modal .modal-meta {

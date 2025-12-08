@@ -229,18 +229,25 @@ buildBotMessage(messageData) {
   const isRichMessage = messageData.summary && messageData.sources;
 
   if (isRichMessage) {
-    // ✅ FIX: Get article_count from the correct location
     const articleCount = messageData.article_count || messageData.coverage_count || (messageData.accuracy ? messageData.accuracy.true_count : 0) || 0;
     const maxCount = 10;
     const fillPercentage = (articleCount / maxCount) * 282.7;
     
-    console.log('🔍 newchat.js buildBotMessage - articleCount:', articleCount);
-    console.log('🔍 messageData:', messageData);
+    // ✅ Detect response type for color coding
+    const summary = messageData.summary || '';
+    let headerClass = 'accordion-header'; // default
+    
+    if (summary.includes('❌') || summary.includes('do not confirm') || summary.includes('No sources found')) {
+      headerClass = 'accordion-header accordion-header--false';
+    } else if (summary.includes('✅') || summary.includes('Evidence exists') || articleCount > 0) {
+      headerClass = 'accordion-header accordion-header--true';
+    } else if (summary.includes('⚠️') || summary.includes('neutral') || summary.includes('unclear')) {
+      headerClass = 'accordion-header accordion-header--neutral';
+    }
 
-    // Rich message with accordion, summary, accuracy, sources
     botMsg.innerHTML = `
       <div class="accordion-item">
-        <div class="accordion-header">
+        <div class="${headerClass}">
           <div class="url-row">
             <strong>Response</strong>
             <span class="response-title">${escapeHtml(messageData.summary.substring(0, 50) + '...')}</span>
