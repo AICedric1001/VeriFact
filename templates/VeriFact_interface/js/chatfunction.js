@@ -257,7 +257,23 @@ function sendMessage(force = false) {
   });
 }
 
-
+function getRelevanceNotification(summary) {
+  if (!summary) return '';
+  
+  const summaryLower = summary.toLowerCase();
+  
+  // Check for non-relevant content indicators
+  const isNotRelevant = summaryLower.includes('do not confirm the specific claim') ||
+                       summaryLower.includes('related topics but not the exact information') ||
+                       summaryLower.includes('no sources found for this query') ||
+                       summaryLower.includes('unable to generate a meaningful summary');
+  
+  if (isNotRelevant) {
+    return '<span class="relevance-notification">This is not related to the claims.</span>';
+  }
+  
+  return '';
+}
 
 
 
@@ -299,7 +315,10 @@ function buildRichBotMessage(data) {
       </div>
       <div class="accordion-content">
         <div class="response-section">
-          <strong>Summary:</strong>
+          <div class="summary-label-wrapper">
+            <strong>Summary:</strong>
+            ${getRelevanceNotification(data.summary)}
+          </div>
           <p class="resp-summary">${escapeHtml(data.summary)}</p>
           <hr>
           <strong>Source Coverage</strong>
@@ -421,7 +440,10 @@ function generateBotResponses(id, chatBox, isFirstMessage) {
           <button class="accordion-toggle"><i class="fa fa-angle-double-down"></i></button>
         </div>
         <div class="accordion-content">
-          <strong>Summary:</strong>
+          <div class="summary-label-wrapper">
+            <strong>Summary:</strong>
+            ${getRelevanceNotification(data.summary)}
+          </div>
           <p class="resp-summary">This is a summary for \"${message}\".</p>
           <hr>
           <strong>Analysis</strong>
@@ -924,7 +946,10 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="accordion-content">
               <div class="response-section">
-                <strong>Summary:</strong>
+                <div class="summary-label-wrapper">
+            <strong>Summary:</strong>
+            ${getRelevanceNotification(data.summary)}
+          </div>
                 <p class="resp-summary">${escapeHtml(data.summary)}</p>
                 <hr>
                 <strong>Source Coverage</strong>
@@ -1080,7 +1105,10 @@ function buildRichBotMessage(data) {
       </div>
       <div class="accordion-content">
         <div class="response-section">
+          <div class="summary-label-wrapper">
           <strong>Summary:</strong>
+          ${getRelevanceNotification(data.summary)}
+          </div>
           <p class="resp-summary">${escapeHtml(data.summary)}</p>
           <hr>
           <strong>Source Coverage</strong>
@@ -1158,7 +1186,10 @@ function buildBotMessageForHistory(messageData) {
         </div>
         <div class="accordion-content">
           <div class="response-section">
-            <strong>Summary:</strong>
+            <div class="summary-label-wrapper">
+              <strong>Summary:</strong>
+              ${getRelevanceNotification(messageData.summary)}
+            </div>
             <p class="resp-summary">${escapeHtml(messageData.summary)}</p>
             <hr>
             <strong>Source Coverage</strong>

@@ -602,8 +602,26 @@ body {
 /* =========================
    Summary
 ========================= */
+.summary-label-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.relevance-notification {
+  background: rgba(229, 57, 53, 0.1);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 2px solid rgba(254, 58, 55, 0.755);
+  white-space: nowrap;
+}
+
 .summary { 
-  background: #445a6a; 
+  background: var(--panel); 
   border: 1px solid var(--border); 
   border-radius: 8px; 
   overflow: hidden; 
@@ -613,6 +631,7 @@ body {
   padding: 10px 12px; 
   border-bottom: 1px solid rgba(255,255,255,0.25); 
   font-weight: 700; 
+  color: var(--text);
 }
 
 .summary-body { 
@@ -715,7 +734,7 @@ body {
 }
 
 .accordion-item.open { 
-  background: #445a6a; 
+  background: var(--panel); 
   border-radius: 8px; 
   border: 1px solid var(--border); 
   overflow: hidden; 
@@ -736,51 +755,6 @@ body {
   position: relative; 
   min-height: 60px; 
   cursor: pointer; 
-}
-
-/* Base accordion header */
-.accordion-header {
-  background-color: #f5f5f5;
-  border-bottom: 1px solid #e0e0e0;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-/* ✅ GREEN - Claim is confirmed/true */
-.accordion-header--true {
-  background-color: #e8f5e9;
-  border-bottom: 2px solid #4caf50;
-  border-left: 4px solid #4caf50;
-}
-
-.accordion-header--true:hover {
-  background-color: #c8e6c9;
-}
-
-/* ❌ RED - Claim is not confirmed/false */
-.accordion-header--false {
-  background-color: #ffebee;
-  border-bottom: 2px solid #f44336;
-  border-left: 4px solid #f44336;
-}
-
-.accordion-header--false:hover {
-  background-color: #ffcdd2;
-}
-
-/* ⚠️ YELLOW/ORANGE - Neutral/unclear */
-.accordion-header--neutral {
-  background-color: #fff3e0;
-  border-bottom: 2px solid #ff9800;
-  border-left: 4px solid #ff9800;
-}
-
-.accordion-header--neutral:hover {
-  background-color: #ffe0b2;
 }
 
 .accordion-header:hover { 
@@ -852,41 +826,27 @@ body {
   overflow: visible; /* let content flow and allow page scroll instead */
 }
 
-/* Enhanced styling with text colors */
-.accordion-header--true .url-row {
-  color: #2e7d32;
-  font-weight: 600;
+/* =========================
+   Custom Checkbox
+========================= */
+.checkbox { 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center; 
 }
 
-.accordion-header--true::before {
-  content: '✓';
-  color: #4caf50;
-  font-weight: bold;
-  margin-right: 8px;
+.checkbox input { 
+  display: none; 
 }
 
-.accordion-header--false .url-row {
-  color: #c62828;
-  font-weight: 600;
-}
-
-.accordion-header--false::before {
-  content: '✕';
-  color: #f44336;
-  font-weight: bold;
-  margin-right: 8px;
-}
-
-.accordion-header--neutral .url-row {
-  color: #e65100;
-  font-weight: 600;
-}
-
-.accordion-header--neutral::before {
-  content: '⚠';
-  color: #ff9800;
-  font-weight: bold;
-  margin-right: 8px;
+.checkbox span { 
+  width: 18px; 
+  height: 18px; 
+  border-radius: 4px; 
+  border: 2px solid rgba(255,255,255,0.85); 
+  display: inline-block; 
+  position: relative; 
+  background: transparent; 
 }
 
 /* =========================
@@ -896,6 +856,8 @@ body {
   display: inline-flex; 
   align-items: center; 
   justify-content: center; 
+  cursor: pointer;
+  margin-left: 8px;
 }
 
 .checkbox input { 
@@ -1431,7 +1393,7 @@ body {
 
 /* Bot accordion card */
 .bot-message .accordion-item {
-  background: #445a6a;
+  background: var(--panel);
   border-radius: 10px;
   border: 1px solid var(--border);
   overflow: hidden;
@@ -1482,10 +1444,15 @@ body {
   align-items: center;
   gap: 8px;
   font-weight: bold;
+  color: var(--text);
 }
 
 .bot-message .url-row i.fa-check-circle {
   color: #4caf50;
+}
+
+.bot-message .response-title {
+  color: var(--text);
 }
 
 .input-wrapper {
@@ -1502,8 +1469,16 @@ body {
   padding: 15px;
   width: 100%;
   outline: none;
+  resize: none;         /* prevent manual resizing */
+  overflow: auto;     /* add scrollbar if text is long */
+  max-height: 120px;    /* keep it neat */
+  line-height: 1.4em;
+  scrollbar-width: thin;
+  scrollbar-color: #6c757d transparent;
+  
 }
 
+/* Buttons */
 .chat-input button {
   border: none;
   border-radius: 50%;
@@ -1772,6 +1747,33 @@ body {
 .notification-error   { background: #f44336; }
 .notification-info    { background: #2196F3; }
 .notification-warning { background: #ff9800; }
+
+/* AI Disclaimer Banner */
+.ai-disclaimer-banner {
+  padding: 8px 12px;
+  margin: 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--panel);
+  color: var(--muted);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-disclaimer-banner i {
+  color: var(--muted);
+}
+
+/* Light mode specific fix for AI disclaimer banner */
+[data-theme="light"] .ai-disclaimer-banner {
+  color: #0e1526;
+}
+
+[data-theme="light"] .ai-disclaimer-banner i {
+  color: #0e1526;
+}
 
 .notification.hide {
   opacity: 0;
@@ -2124,6 +2126,12 @@ body {
   margin-right: 8px;
 }
 
+#archiveModal .archive-select {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 .modal .modal-meta {
   display: flex;
   justify-content: flex-end;
@@ -2139,6 +2147,47 @@ body {
   border-top: 1px solid var(--border);
 }
 
+
+
+.btn-primary, .btn-secondary {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.modal .btn-primary {
+  background: var(--brand-veri);
+  border: 2px solid var(--border);
+  color: #fff;
+}
+
+.modal .btn-primary:hover {
+  filter: brightness(0.95);
+}
+
+.modal .btn-secondary {
+  background: var(--panel-outer);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.modal .btn-secondary:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+/* Screen-reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
 
 
 .btn-primary, .btn-secondary {

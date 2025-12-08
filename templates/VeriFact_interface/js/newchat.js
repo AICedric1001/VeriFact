@@ -220,6 +220,24 @@ class ChatManager {
     this.renderChatHistory();
   }
 
+  getRelevanceNotification(summary) {
+    if (!summary) return '';
+    
+    const summaryLower = summary.toLowerCase();
+    
+    // Check for non-relevant content indicators
+    const isNotRelevant = summaryLower.includes('do not confirm the specific claim') ||
+                         summaryLower.includes('related topics but not the exact information') ||
+                         summaryLower.includes('no sources found for this query') ||
+                         summaryLower.includes('unable to generate a meaningful summary');
+    
+    if (isNotRelevant) {
+      return '<span class="relevance-notification">This is not related to the claim.</span>';
+    }
+    
+    return '';
+  }
+
 // Build bot message with full UI (summary, sources, accuracy)
 buildBotMessage(messageData) {
   const botMsg = document.createElement('div');
@@ -261,7 +279,10 @@ buildBotMessage(messageData) {
         </div>
         <div class="accordion-content">
           <div class="response-section">
-            <strong>Summary:</strong>
+            <div class="summary-label-wrapper">
+              <strong>Summary:</strong>
+              ${this.getRelevanceNotification(messageData.summary)}
+            </div>
             <p class="resp-summary">${escapeHtml(messageData.summary)}</p>
             <hr>
             <strong>Source Coverage</strong>
