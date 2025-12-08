@@ -8,6 +8,7 @@ import os
 import time
 import random
 from trusted_sources import FILTERED_DOMAINS
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Load spaCy English model
 nlp = spacy.load("en_core_web_sm")
@@ -32,7 +33,7 @@ SCRAPER_CONFIG = {
 }
 
 # --- Function to search using SerpApi ---
-def search_serpapi(query, api_key=None, site_filter=None, num_results=20):
+def search_serpapi(query, api_key=None, site_filter=None, num_results=50):
     effective_key = (
         api_key
         or os.getenv("SERPAPI_API_KEY")
@@ -164,12 +165,49 @@ def extract_domain(url):
     except Exception:
         return None
 
+# --- Single Article Scraper (for multi-threading) ---
+def scrape_single_article(item):
+    """Scrape a single article and return results."""
+    url = item.get("url")
+    title = item.get("title")
+    domain = item.get("domain")
+    
+    if not url:
+        return None
+    
+    try:
+        print(f"▶️  Fetching VERIFIED article from {domain}: {url}")
+        content = extract_article_text(url, max_retries=SCRAPER_CONFIG["max_retry_attempts"])
+        
+        if content and len(content.strip()) > SCRAPER_CONFIG["min_content_length"]:
+            print("  🧠 Running NER…")
+            analysis = analyze_text(content)
+            print(f"  🧾 Entities extracted: {len(analysis)}")
+            return {
+                "title": title,
+                "url": url,
+                "domain": domain,
+                "content": content,
+                "entities": analysis,
+                "verified": True,
+                "is_trusted": True
+            }
+        else:
+            print(f"  ⏭️  Skipped: insufficient content - {url}")
+            return None
+    except Exception as e:
+        print(f"  ❌ Error scraping {url}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 # --- Full System Workflow - VERIFIED SOURCES ONLY ---
-def main_system(query, api_key=None, use_trusted_sources=True, target_articles=None):
+def main_system(query, api_key=None, use_trusted_sources=True, target_articles=None, max_workers=5):
     # Allow override of target articles
     if target_articles is None:
         target_articles = SCRAPER_CONFIG["target_articles"]
     
+    start_time = time.time()  # Track total execution time
     print(f"\n🔎 Searching for: {query}")
     print(f"🎯 Target: {target_articles} articles")
     
@@ -318,52 +356,37 @@ def main_system(query, api_key=None, use_trusted_sources=True, target_articles=N
 
     print(f"✅ Filtered to {len(verified_links)} verified sources with UNIQUE domains")
 
-    # **Scrape verified sources until we reach target - ONE PER DOMAIN**
+    # **Scrape ONLY verified sources using multi-threading**
     results = []
     successful_domains = set()  # Track domains we've successfully scraped
     
-    for idx, item in enumerate(verified_links, start=1):
-        # Stop if we've reached our target
-        if len(results) >= target_articles:
-            print(f"🎯 Target of {target_articles} articles reached!")
-            break
-            
-        url = item.get("url")
-        title = item.get("title")
-        domain = item.get("domain")
+    print(f"🔄 Starting multi-threaded scraping with {max_workers} workers...")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all scraping tasks
+        future_to_item = {executor.submit(scrape_single_article, item): item for item in verified_links}
         
-        if not url:
-            continue
-        
-        # Double-check domain uniqueness (safety check)
-        if domain in successful_domains:
-            print(f"⚠️  Skipping - already have article from {domain}")
-            continue
-            
-        print(f"\n[{idx}/{len(verified_links)}] ▶️  Fetching from {domain}: {url}")
-        content = extract_article_text(url, max_retries=SCRAPER_CONFIG["max_retry_attempts"])
-        
-        if content and len(content.strip()) > SCRAPER_CONFIG["min_content_length"]:
-            print("  🧠 Running NER…")
-            analysis = analyze_text(content)
-            print(f"  🧾 Entities extracted: {len(analysis)}")
-            results.append({
-                "title": title,
-                "url": url,
-                "domain": domain,
-                "content": content,
-                "entities": analysis,
-                "verified": True,
-                "is_trusted": True
-            })
-            successful_domains.add(domain)  # Mark this domain as successfully scraped
-            print(f"  ✅ Added {domain} to results ({len(results)}/{target_articles})")
-        else:
-            print(f"  ⭕️  Skipped: insufficient content (min: {SCRAPER_CONFIG['min_content_length']} chars)")
-            print(f"     Will try next article from different domain")
+        # Process completed tasks as they finish
+        completed = 0
+        for future in as_completed(future_to_item):
+            completed += 1
+            result = future.result()
+            if result:
+                domain = result.get('domain')
+                if domain not in successful_domains:
+                    if len(results) < target_articles:
+                        results.append(result)
+                        successful_domains.add(domain)
+                        print(f"  ✅ Added {domain} to results ({len(results)}/{target_articles})")
+                    else:
+                        print(f"🎯 Target of {target_articles} articles reached!")
+                        break
+            print(f"  📊 Progress: {completed}/{len(verified_links)} articles processed")
 
     print(f"\n{'='*60}")
+    elapsed_time = time.time() - start_time
     print(f"✅ Completed. VERIFIED articles kept: {len(results)}/{target_articles}")
+    print(f"⏱️  Total time: {elapsed_time:.2f} seconds")
     if len(results) < target_articles:
         print(f"⚠️  Warning: Only retrieved {len(results)} of {target_articles} target articles")
         print(f"   Reasons: extraction failures, paywalls, or insufficient verified sources")

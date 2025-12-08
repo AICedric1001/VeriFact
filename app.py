@@ -1,8 +1,8 @@
 from flask import Flask, render_template, request, redirect, session, jsonify, send_from_directory, Response
 import json
 import os
+from trusted_sources import FILTERED_DOMAINS
 from urllib.parse import urlparse
-
 import psycopg2
 import psycopg2.extras
 from scraper import main_system, search_serpapi
@@ -40,13 +40,15 @@ except OSError:
 # Config for image uploads
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'img')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-TRUSTED_DOMAINS = [
+extracted_domains = [urlparse(url).netloc.replace('www.', '') for url in FILTERED_DOMAINS]
+TRUSTED_DOMAINS = extracted_domains + [
     'rappler.com',
-    'inquirer.net',
+    'newsinfo.inquirer.net',
     'verafiles.org', 
     'philstar.com',
     'abs-cbn.com',
     'tsek.ph',
+    'gmanetwork.com'
 ]
 MAX_RELEVANT_SOURCES = int(os.getenv("VERIFACT_MAX_RELEVANT_SOURCES", "12"))
 TRUSTED_SOURCE_WEIGHT = float(os.getenv("VERIFACT_TRUSTED_SOURCE_WEIGHT", "0.25"))
@@ -338,8 +340,8 @@ def get_db_connection():
     return psycopg2.connect(
         host="127.0.0.1",
         user="postgres",
-        password="lenroy3221",  #Change this to your own password Corl4453
-        database="newVeriFactDB",
+        password="Corl4453",  #Change this to your own password Corl4453
+        database="websearch_demo",
         cursor_factory=psycopg2.extras.RealDictCursor
     )
 
